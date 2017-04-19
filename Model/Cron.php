@@ -23,7 +23,11 @@
 
 namespace Adyen\Payment\Model;
 
+use Magento\Framework\Api\SearchCriteriaBuilder;
 use Magento\Framework\Webapi\Exception;
+use Magento\Sales\Api\OrderPaymentRepositoryInterface;
+use Magento\Sales\Api\TransactionRepositoryInterface;
+use Magento\Sales\Model\Order;
 use Magento\Sales\Model\Order\Email\Sender\OrderSender;
 
 class Cron
@@ -163,6 +167,21 @@ class Cron
     protected $_adyenOrderPaymentCollectionFactory;
 
     /**
+     * @var TransactionRepositoryInterface
+     */
+    private $transactionRepository;
+
+    /**
+     * @var SearchCriteriaBuilder
+     */
+    private $searchCriteriaBuilder;
+
+    /**
+     * @var OrderPaymentRepositoryInterface
+     */
+    private $orderPaymentRepository;
+
+    /**
      * Cron constructor.
      *
      * @param \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig
@@ -177,6 +196,9 @@ class Cron
      * @param Api\PaymentRequest $paymentRequest
      * @param Order\PaymentFactory $adyenOrderPaymentFactory
      * @param Resource\Order\Payment\CollectionFactory $adyenOrderPaymentCollectionFactory
+     * @param TransactionRepositoryInterface $transactionRepository
+     * @param SearchCriteriaBuilder $searchCriteriaBuilder
+     * @param OrderPaymentRepositoryInterface $orderPaymentRepository
      */
     public function __construct(
         \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig,
@@ -190,7 +212,10 @@ class Cron
         \Adyen\Payment\Model\Resource\Billing\Agreement\CollectionFactory $billingAgreementCollectionFactory,
         \Adyen\Payment\Model\Api\PaymentRequest $paymentRequest,
         \Adyen\Payment\Model\Order\PaymentFactory $adyenOrderPaymentFactory,
-        \Adyen\Payment\Model\Resource\Order\Payment\CollectionFactory $adyenOrderPaymentCollectionFactory
+        \Adyen\Payment\Model\Resource\Order\Payment\CollectionFactory $adyenOrderPaymentCollectionFactory,
+        TransactionRepositoryInterface $transactionRepository,
+        SearchCriteriaBuilder $searchCriteriaBuilder,
+        OrderPaymentRepositoryInterface $orderPaymentRepository
     ) {
         $this->_scopeConfig = $scopeConfig;
         $this->_adyenLogger = $adyenLogger;
@@ -204,6 +229,9 @@ class Cron
         $this->_adyenPaymentRequest = $paymentRequest;
         $this->_adyenOrderPaymentFactory = $adyenOrderPaymentFactory;
         $this->_adyenOrderPaymentCollectionFactory = $adyenOrderPaymentCollectionFactory;
+        $this->transactionRepository = $transactionRepository;
+        $this->searchCriteriaBuilder = $searchCriteriaBuilder;
+        $this->orderPaymentRepository = $orderPaymentRepository;
     }
 
     /**
@@ -540,38 +568,56 @@ class Cron
             $ccLast4 = $this->_retrieveLast4DigitsFromReason($this->_reason);
         }
 
-        $this->_order->getPayment()->setAdyenPspReference($this->_pspReference);
-        $this->_order->getPayment()->setAdditionalInformation('pspReference', $this->_pspReference);
+        $payment = $this->_order->getPayment();
+
+        if (!is_null($payment->getAdyenPspReference())
+            && $this->_pspReference != $payment->getAdyenPspReference()
+        ) {
+            // Load subsequent payment of order
+            $criteria = $this->searchCriteriaBuilder
+                ->addFilter('adyen_psp_reference', $this->_pspReference)
+                ->addFilter('parent_id', $this->_order->getId());
+
+            $payments = $this->orderPaymentRepository->getList($criteria->create())->getItems();
+            $payment = reset($payments);
+
+            if (!$payment->getEntityId()) {
+                throw new Exception(__('Error processing notification; no payment found with PSP reference %1', $this->_pspReference));
+            }
+        }
+
+        $payment->setAdyenPspReference($this->_pspReference);
+        $payment->setAdditionalInformation('pspReference', $this->_pspReference);
 
         if ($this->_klarnaReservationNumber != "") {
-            $this->_order->getPayment()->setAdditionalInformation(
+            $payment->setAdditionalInformation(
                 'adyen_klarna_number', $this->_klarnaReservationNumber
             );
         }
         if (isset($ccLast4) && $ccLast4 != "") {
             // this field is column in db by core
-            $this->_order->getPayment()->setccLast4($ccLast4);
+            $payment->setccLast4($ccLast4);
         }
         if (isset($avsResult) && $avsResult != "") {
-            $this->_order->getPayment()->setAdditionalInformation('adyen_avs_result', $avsResult);
+            $payment->setAdditionalInformation('adyen_avs_result', $avsResult);
         }
         if (isset($cvcResult) && $cvcResult != "") {
-            $this->_order->getPayment()->setAdditionalInformation('adyen_cvc_result', $cvcResult);
+            $payment->setAdditionalInformation('adyen_cvc_result', $cvcResult);
         }
         if ($this->_boletoPaidAmount != "") {
-            $this->_order->getPayment()->setAdditionalInformation('adyen_boleto_paid_amount', $this->_boletoPaidAmount);
+            $payment->setAdditionalInformation('adyen_boleto_paid_amount', $this->_boletoPaidAmount);
         }
         if (isset($totalFraudScore) && $totalFraudScore != "") {
-            $this->_order->getPayment()->setAdditionalInformation('adyen_total_fraud_score', $totalFraudScore);
+            $payment->setAdditionalInformation('adyen_total_fraud_score', $totalFraudScore);
         }
         if (isset($refusalReasonRaw) && $refusalReasonRaw != "") {
-            $this->_order->getPayment()->setAdditionalInformation('adyen_refusal_reason_raw', $refusalReasonRaw);
+            $payment->setAdditionalInformation('adyen_refusal_reason_raw', $refusalReasonRaw);
         }
         if (isset($acquirerReference) && $acquirerReference != "") {
-            $this->_order->getPayment()->setAdditionalInformation('adyen_acquirer_reference', $acquirerReference);
+            $payment->setAdditionalInformation('adyen_acquirer_reference', $acquirerReference);
         }
         if (isset($authCode) && $authCode != "") {
-            $this->_order->getPayment()->setAdditionalInformation('adyen_auth_code', $authCode);
+            $payment->setAdditionalInformation('adyen_auth_code', $authCode);
         }
     }
 
@@ -1040,7 +1086,18 @@ class Cron
             $this->_order->setState(\Magento\Sales\Model\Order::STATE_NEW);
         }
 
-        $paymentObj = $this->_order->getPayment();
+        $criteria = $this->searchCriteriaBuilder
+            ->addFilter('parent_id', $this->_order->getId());
+
+        $payments = $this->orderPaymentRepository->getList($criteria->create())->getItems();
+        if (count($payments) <= 1) {
+            $paymentObj = $this->_order->getPayment();
+        }
+        else {
+            $criteria->addFilter('adyen_psp_reference', $this->_pspReference);
+            $payments = $this->orderPaymentRepository->getList($criteria->create())->getItems();
+            $paymentObj = reset($payments);
+        }
 
         // set pspReference as transactionId
         $paymentObj->setCcTransId($this->_pspReference);
@@ -1094,14 +1151,81 @@ class Cron
             ->setUpdatedAt($date)
             ->save();
 
+        $invoiceQtys = $this->_getInvoiceQtys($amount);
 
-        if ($this->_isTotalAmount($paymentObj->getEntityId(), $orderCurrencyCode)) {
-            $this->_createInvoice();
+        if ($this->_isTotalAmount($paymentObj->getEntityId(), $orderCurrencyCode) || is_array($invoiceQtys)) {
+            $this->_createInvoice($invoiceQtys, $this->_isPreOrder());
         } else {
             $this->_adyenLogger->addAdyenNotificationCronjob(
                 'This is a partial AUTHORISATION and the full amount is not reached'
             );
         }
+    }
+
+    /**
+     * Check if order contains pre-order items
+     * Must be called before creating invoice, since all items are unmarked as pre-order after first invoice creation
+     *
+     * @return bool
+     */
+    private function _isPreOrder()
+    {
+        foreach ($this->_order->getAllItems() as $item) {
+            if ($item->getIsPreOrder()) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if transaction contains items, returns false if not, returns all item quantities to invoice
+     * if payment transaction contains items and the paid amount corresponds to the grand total
+     * of the order minus the item row totals that are not specified in the transaction
+     *
+     * @param $paymentAmount
+     * @return array|bool
+     */
+    private function _getInvoiceQtys($paymentAmount)
+    {
+        $searchCriteria = $this->searchCriteriaBuilder->addFilter('txn_id', $this->_pspReference)->create();
+
+        $transactions = $this->transactionRepository->getList($searchCriteria)->getItems();
+        $transaction = reset($transactions);
+
+        if (!$transaction) {
+            return false;
+        }
+
+        $additionalInfo = $transaction->getAdditionalInformation();
+
+        if (!isset($additionalInfo['items'])) {
+            // Invoice all items, proceed as usual
+            return false;
+        }
+
+        $transactionItems = $additionalInfo['items'];
+
+        $invoiceQtys = [];
+        $transactionAmount = $this->_order->getGrandTotal();
+        foreach ($this->_order->getAllVisibleItems() as $orderItem) {
+            /** @var \Magento\Sales\Model\Order\Item $orderItem */
+            if (!in_array($orderItem->getQuoteItemId(), $transactionItems)) {
+                // Item not specified in additional data, don't invoice
+                $transactionAmount -= $orderItem->getRowTotalInclTax();
+
+                continue;
+            }
+
+            $invoiceQtys[$orderItem->getItemId()] = $orderItem->getQtyOrdered();
+        }
+
+        if ($transactionAmount != $paymentAmount) {
+            return false;
+        }
+
+        return $invoiceQtys;
     }
 
     /**
@@ -1314,11 +1438,13 @@ class Cron
     }
 
     /**
+     * @param array|bool $quantities
+     * @param bool $isPreOrder
      * @throws Exception
      * @throws \Magento\Framework\Exception\LocalizedException
      * @return void
      */
-    protected function _createInvoice()
+    protected function _createInvoice($quantities = false, $isPreOrder = false)
     {
         $this->_adyenLogger->addAdyenNotificationCronjob('Creating invoice for order');
 
@@ -1329,7 +1455,7 @@ class Cron
              * and it could result in a deadlock see https://github.com/Adyen/magento/issues/334
              */
             try {
-                $invoice = $this->_order->prepareInvoice();
+                $invoice = $this->_order->prepareInvoice($quantities ? $quantities : []);
                 $invoice->getOrder()->setIsInProcess(true);
 
                 // set transaction id so you can do a online refund from credit memo
@@ -1365,7 +1491,7 @@ class Cron
                 throw new Exception(sprintf('Error saving invoice. The error message is:', $e->getMessage()));
             }
 
-            $this->_setPaymentAuthorized();
+            $this->_setPaymentAuthorized(true, false, $isPreOrder);
 
             $invoiceAutoMail = (bool) $this->_getConfigData(
                 'send_invoice_update_mail', 'adyen_abstract', $this->_order->getStoreId()
@@ -1374,7 +1500,12 @@ class Cron
             if ($invoiceAutoMail) {
                 $invoice->sendEmail();
             }
-        } else {
+        }
+        elseif ($quantities) {
+            $this->_adyenLogger->addAdyenNotificationCronjob('Invoice is already created, only authorizing payment');
+            $this->_setPaymentAuthorized(true, false, $isPreOrder);
+        }
+        else {
             $this->_adyenLogger->addAdyenNotificationCronjob('It is not possible to create invoice for this order');
         }
     }
@@ -1382,9 +1513,10 @@ class Cron
     /**
      * @param bool $manualReviewComment
      * @param bool $createInvoice
+     * @param bool $isPreOrder
      * @throws Exception
      */
-    protected function _setPaymentAuthorized($manualReviewComment = true, $createInvoice = false)
+    protected function _setPaymentAuthorized($manualReviewComment = true, $createInvoice = false, $isPreOrder = false)
     {
         $this->_adyenLogger->addAdyenNotificationCronjob('Set order to authorised');
 
@@ -1400,9 +1532,11 @@ class Cron
             );
             $this->_createInvoice();
         }
-        
+
+        $statusPath = $isPreOrder ? 'payment_authorized_pre_order' : 'payment_authorized';
+
         $status = $this->_getConfigData(
-            'payment_authorized', 'adyen_abstract', $this->_order->getStoreId()
+            $statusPath, 'adyen_abstract', $this->_order->getStoreId()
         );
 
         // virtual order can have different status
@@ -1459,6 +1593,10 @@ class Cron
                 $status = $fraudManualReviewStatus;
                 $comment = "Adyen Payment is in Manual Review check the Adyen platform";
             }
+        }
+
+        if (!empty($status)) {
+            $this->_order->setState(Order::STATE_PROCESSING);
         }
 
         $status = (!empty($status)) ? $status : $this->_order->getStatus();
