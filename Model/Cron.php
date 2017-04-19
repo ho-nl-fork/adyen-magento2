@@ -23,7 +23,9 @@
 
 namespace Adyen\Payment\Model;
 
+use Magento\Framework\Api\SearchCriteriaBuilder;
 use Magento\Framework\Webapi\Exception;
+use Magento\Sales\Api\TransactionRepositoryInterface;
 use Magento\Sales\Model\Order\Email\Sender\OrderSender;
 
 class Cron
@@ -164,6 +166,16 @@ class Cron
     protected $_adyenOrderPaymentCollectionFactory;
 
     /**
+     * @var TransactionRepositoryInterface
+     */
+    private $transactionRepository;
+
+    /**
+     * @var SearchCriteriaBuilder
+     */
+    private $searchCriteriaBuilder;
+
+    /**
      * Cron constructor.
      *
      * @param \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig
@@ -176,6 +188,10 @@ class Cron
      * @param Billing\AgreementFactory $billingAgreementFactory
      * @param Resource\Billing\Agreement\CollectionFactory $billingAgreementCollectionFactory
      * @param Api\PaymentRequest $paymentRequest
+     * @param Order\PaymentFactory $adyenOrderPaymentFactory
+     * @param Resource\Order\Payment\CollectionFactory $adyenOrderPaymentCollectionFactory
+     * @param TransactionRepositoryInterface $transactionRepository
+     * @param SearchCriteriaBuilder $searchCriteriaBuilder
      */
     public function __construct(
         \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig,
@@ -189,7 +205,9 @@ class Cron
         \Adyen\Payment\Model\Resource\Billing\Agreement\CollectionFactory $billingAgreementCollectionFactory,
         \Adyen\Payment\Model\Api\PaymentRequest $paymentRequest,
         \Adyen\Payment\Model\Order\PaymentFactory $adyenOrderPaymentFactory,
-        \Adyen\Payment\Model\Resource\Order\Payment\CollectionFactory $adyenOrderPaymentCollectionFactory
+        \Adyen\Payment\Model\Resource\Order\Payment\CollectionFactory $adyenOrderPaymentCollectionFactory,
+        TransactionRepositoryInterface $transactionRepository,
+        SearchCriteriaBuilder $searchCriteriaBuilder
     ) {
         $this->_scopeConfig = $scopeConfig;
         $this->_adyenLogger = $adyenLogger;
@@ -203,6 +221,8 @@ class Cron
         $this->_adyenPaymentRequest = $paymentRequest;
         $this->_adyenOrderPaymentFactory = $adyenOrderPaymentFactory;
         $this->_adyenOrderPaymentCollectionFactory = $adyenOrderPaymentCollectionFactory;
+        $this->transactionRepository = $transactionRepository;
+        $this->searchCriteriaBuilder = $searchCriteriaBuilder;
     }
 
     /**
@@ -1067,14 +1087,59 @@ class Cron
             ->setUpdatedAt($date)
             ->save();
 
+        $preOrderQuantities = $this->_getPreOrderQuantities($amount);
 
-        if ($this->_isTotalAmount($paymentObj->getEntityId(), $orderCurrencyCode)) {
-            $this->_createInvoice();
+        if ($this->_isTotalAmount($paymentObj->getEntityId(), $orderCurrencyCode) || is_array($preOrderQuantities)) {
+            $this->_createInvoice($preOrderQuantities);
         } else {
             $this->_adyenLogger->addAdyenNotificationCronjob(
                 'This is a partial AUTHORISATION and the full amount is not reached'
             );
         }
+    }
+
+    /**
+     * Check if order contains pre-order items, returns false if not, returns all order item quantities to invoice
+     * without pre-order items if payment transaction contains pre-order items and the paid amount corresponds to
+     * the grand total of the order minus the pre-order product row totals
+     *
+     * @param $paymentAmount
+     * @return array|bool
+     */
+    private function _getPreOrderQuantities($paymentAmount)
+    {
+        $searchCriteria = $this->searchCriteriaBuilder->addFilter('txn_id', $this->_pspReference)->create();
+
+        $transactions = $this->transactionRepository->getList($searchCriteria)->getItems();
+        $transaction = reset($transactions);
+
+        $additionalInfo = $transaction->getAdditionalInformation();
+
+        if (!isset($additionalInfo['pre_order_items'])) {
+            return false;
+        }
+
+        $preOrderItemIds = $additionalInfo['pre_order_items'];
+
+        $preOrderQtys = [];
+        $prePaidAmount = $this->_order->getGrandTotal();
+        foreach ($this->_order->getAllVisibleItems() as $orderItem) {
+            /** @var \Magento\Sales\Model\Order\Item $orderItem */
+            if (in_array($orderItem->getQuoteItemId(), $preOrderItemIds)) {
+                // Pre-order item, don't invoice directly
+                $prePaidAmount -= $orderItem->getRowTotalInclTax();
+
+                continue;
+            }
+
+            $preOrderQtys[$orderItem->getItemId()] = $orderItem->getQtyOrdered();
+        }
+
+        if ($prePaidAmount != $paymentAmount) {
+            return false;
+        }
+
+        return $preOrderQtys;
     }
 
     /**
@@ -1274,10 +1339,11 @@ class Cron
     }
 
     /**
+     * @param array|bool $quantities
      * @throws Exception
      * @throws \Magento\Framework\Exception\LocalizedException
      */
-    protected function _createInvoice()
+    protected function _createInvoice($quantities = false)
     {
         $this->_adyenLogger->addAdyenNotificationCronjob('Creating invoice for order');
 
@@ -1288,7 +1354,7 @@ class Cron
              * and it could result in a deadlock see https://github.com/Adyen/magento/issues/334
              */
             try {
-                $invoice = $this->_order->prepareInvoice();
+                $invoice = $this->_order->prepareInvoice($quantities);
                 $invoice->getOrder()->setIsInProcess(true);
 
                 // set transaction id so you can do a online refund from credit memo
