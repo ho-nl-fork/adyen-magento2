@@ -1464,9 +1464,17 @@ class Cron
             );
             $this->_createInvoice();
         }
-        
+
+        $statusPath = 'payment_authorized';
+        foreach ($this->_order->getAllVisibleItems() as $item) {
+            if ($item->getIsPreOrder()) {
+                $statusPath = 'payment_authorized_pre_order';
+                break;
+            }
+        }
+
         $status = $this->_getConfigData(
-            'payment_authorized', 'adyen_abstract', $this->_order->getStoreId()
+            $statusPath, 'adyen_abstract', $this->_order->getStoreId()
         );
 
         // virtual order can have different status
