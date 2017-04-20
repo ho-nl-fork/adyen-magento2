@@ -1393,7 +1393,7 @@ class Cron
              * and it could result in a deadlock see https://github.com/Adyen/magento/issues/334
              */
             try {
-                $invoice = $this->_order->prepareInvoice($quantities);
+                $invoice = $this->_order->prepareInvoice($quantities ? $quantities : []);
                 $invoice->getOrder()->setIsInProcess(true);
 
                 // set transaction id so you can do a online refund from credit memo
