@@ -1138,6 +1138,10 @@ class Cron
         $transactions = $this->transactionRepository->getList($searchCriteria)->getItems();
         $transaction = reset($transactions);
 
+        if (!$transaction) {
+            return false;
+        }
+
         $additionalInfo = $transaction->getAdditionalInformation();
 
         if (!isset($additionalInfo['pre_order_items'])) {
@@ -1150,7 +1154,14 @@ class Cron
         $prePaidAmount = $this->_order->getGrandTotal();
         foreach ($this->_order->getAllVisibleItems() as $orderItem) {
             /** @var \Magento\Sales\Model\Order\Item $orderItem */
-            if (in_array($orderItem->getQuoteItemId(), $preOrderItemIds)) {
+            $checkItemIds = [$orderItem->getQuoteItemId()];
+            foreach ($orderItem->getChildrenItems() as $childItem) {
+                if ($childItem->getData('is_pre_order')) {
+                    $checkItemIds[] = $childItem->getQuoteItemId();
+                }
+            }
+
+            if (count(array_intersect($checkItemIds, $preOrderItemIds)) > 0) {
                 // Pre-order item, don't invoice directly
                 $prePaidAmount -= $orderItem->getRowTotalInclTax();
 
