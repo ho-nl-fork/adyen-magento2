@@ -25,6 +25,7 @@ namespace Adyen\Payment\Model;
 
 use Magento\Framework\Api\SearchCriteriaBuilder;
 use Magento\Framework\Webapi\Exception;
+use Magento\Sales\Api\OrderPaymentRepositoryInterface;
 use Magento\Sales\Api\TransactionRepositoryInterface;
 use Magento\Sales\Model\Order\Email\Sender\OrderSender;
 
@@ -175,6 +176,11 @@ class Cron
     private $searchCriteriaBuilder;
 
     /**
+     * @var OrderPaymentRepositoryInterface
+     */
+    private $orderPaymentRepository;
+
+    /**
      * Cron constructor.
      *
      * @param \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig
@@ -191,6 +197,7 @@ class Cron
      * @param Resource\Order\Payment\CollectionFactory $adyenOrderPaymentCollectionFactory
      * @param TransactionRepositoryInterface $transactionRepository
      * @param SearchCriteriaBuilder $searchCriteriaBuilder
+     * @param OrderPaymentRepositoryInterface $orderPaymentRepository
      */
     public function __construct(
         \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig,
@@ -206,7 +213,8 @@ class Cron
         \Adyen\Payment\Model\Order\PaymentFactory $adyenOrderPaymentFactory,
         \Adyen\Payment\Model\Resource\Order\Payment\CollectionFactory $adyenOrderPaymentCollectionFactory,
         TransactionRepositoryInterface $transactionRepository,
-        SearchCriteriaBuilder $searchCriteriaBuilder
+        SearchCriteriaBuilder $searchCriteriaBuilder,
+        OrderPaymentRepositoryInterface $orderPaymentRepository
     ) {
         $this->_scopeConfig = $scopeConfig;
         $this->_adyenLogger = $adyenLogger;
@@ -222,6 +230,7 @@ class Cron
         $this->_adyenOrderPaymentCollectionFactory = $adyenOrderPaymentCollectionFactory;
         $this->transactionRepository = $transactionRepository;
         $this->searchCriteriaBuilder = $searchCriteriaBuilder;
+        $this->orderPaymentRepository = $orderPaymentRepository;
     }
 
     /**
@@ -558,38 +567,56 @@ class Cron
             $ccLast4 = $this->_retrieveLast4DigitsFromReason($this->_reason);
         }
 
-        $this->_order->getPayment()->setAdyenPspReference($this->_pspReference);
-        $this->_order->getPayment()->setAdditionalInformation('pspReference', $this->_pspReference);
+        $payment = $this->_order->getPayment();
+
+        if (!is_null($payment->getAdyenPspReference())
+            && $this->_pspReference != $payment->getAdyenPspReference()
+        ) {
+            // Load subsequent payment of order
+            $criteria = $this->searchCriteriaBuilder
+                ->addFilter('adyen_psp_reference', $this->_pspReference)
+                ->addFilter('parent_id', $this->_order->getId());
+
+            $payments = $this->orderPaymentRepository->getList($criteria->create())->getItems();
+            $payment = reset($payments);
+
+            if (!$payment->getEntityId()) {
+                throw new Exception(__('Error processing notification; no payment found with PSP reference %1', $this->_pspReference));
+            }
+        }
+
+        $payment->setAdyenPspReference($this->_pspReference);
+        $payment->setAdditionalInformation('pspReference', $this->_pspReference);
 
         if ($this->_klarnaReservationNumber != "") {
-            $this->_order->getPayment()->setAdditionalInformation(
+            $payment->setAdditionalInformation(
                 'adyen_klarna_number', $this->_klarnaReservationNumber
             );
         }
         if (isset($ccLast4) && $ccLast4 != "") {
             // this field is column in db by core
-            $this->_order->getPayment()->setccLast4($ccLast4);
+            $payment->setccLast4($ccLast4);
         }
         if (isset($avsResult) && $avsResult != "") {
-            $this->_order->getPayment()->setAdditionalInformation('adyen_avs_result', $avsResult);
+            $payment->setAdditionalInformation('adyen_avs_result', $avsResult);
         }
         if (isset($cvcResult) && $cvcResult != "") {
-            $this->_order->getPayment()->setAdditionalInformation('adyen_cvc_result', $cvcResult);
+            $payment->setAdditionalInformation('adyen_cvc_result', $cvcResult);
         }
         if ($this->_boletoPaidAmount != "") {
-            $this->_order->getPayment()->setAdditionalInformation('adyen_boleto_paid_amount', $this->_boletoPaidAmount);
+            $payment->setAdditionalInformation('adyen_boleto_paid_amount', $this->_boletoPaidAmount);
         }
         if (isset($totalFraudScore) && $totalFraudScore != "") {
-            $this->_order->getPayment()->setAdditionalInformation('adyen_total_fraud_score', $totalFraudScore);
+            $payment->setAdditionalInformation('adyen_total_fraud_score', $totalFraudScore);
         }
         if (isset($refusalReasonRaw) && $refusalReasonRaw != "") {
-            $this->_order->getPayment()->setAdditionalInformation('adyen_refusal_reason_raw', $refusalReasonRaw);
+            $payment->setAdditionalInformation('adyen_refusal_reason_raw', $refusalReasonRaw);
         }
         if (isset($acquirerReference) && $acquirerReference != "") {
-            $this->_order->getPayment()->setAdditionalInformation('adyen_acquirer_reference', $acquirerReference);
+            $payment->setAdditionalInformation('adyen_acquirer_reference', $acquirerReference);
         }
         if (isset($authCode) && $authCode != "") {
-            $this->_order->getPayment()->setAdditionalInformation('adyen_auth_code', $authCode);
+            $payment->setAdditionalInformation('adyen_auth_code', $authCode);
         }
     }
 
@@ -1058,7 +1085,18 @@ class Cron
             $this->_order->setState(\Magento\Sales\Model\Order::STATE_NEW);
         }
 
-        $paymentObj = $this->_order->getPayment();
+        $criteria = $this->searchCriteriaBuilder
+            ->addFilter('parent_id', $this->_order->getId());
+
+        $payments = $this->orderPaymentRepository->getList($criteria->create())->getItems();
+        if (count($payments) <= 1) {
+            $paymentObj = $this->_order->getPayment();
+        }
+        else {
+            $criteria->addFilter('adyen_psp_reference', $this->_pspReference);
+            $payments = $this->orderPaymentRepository->getList($criteria->create())->getItems();
+            $paymentObj = reset($payments);
+        }
 
         // set pspReference as transactionId
         $paymentObj->setCcTransId($this->_pspReference);
