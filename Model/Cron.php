@@ -1150,10 +1150,10 @@ class Cron
             ->setUpdatedAt($date)
             ->save();
 
-        $preOrderQuantities = $this->_getPreOrderQuantities($amount);
+        $invoiceQtys = $this->_getInvoiceQtys($amount);
 
-        if ($this->_isTotalAmount($paymentObj->getEntityId(), $orderCurrencyCode) || is_array($preOrderQuantities)) {
-            $this->_createInvoice($preOrderQuantities);
+        if ($this->_isTotalAmount($paymentObj->getEntityId(), $orderCurrencyCode) || is_array($invoiceQtys)) {
+            $this->_createInvoice($invoiceQtys);
         } else {
             $this->_adyenLogger->addAdyenNotificationCronjob(
                 'This is a partial AUTHORISATION and the full amount is not reached'
@@ -1169,7 +1169,7 @@ class Cron
      * @param $paymentAmount
      * @return array|bool
      */
-    private function _getPreOrderQuantities($paymentAmount)
+    private function _getInvoiceQtys($paymentAmount)
     {
         $searchCriteria = $this->searchCriteriaBuilder->addFilter('txn_id', $this->_pspReference)->create();
 
@@ -1189,7 +1189,7 @@ class Cron
 
         $transactionItems = $additionalInfo['items'];
 
-        $preOrderQtys = [];
+        $invoiceQtys = [];
         $transactionAmount = $this->_order->getGrandTotal();
         foreach ($this->_order->getAllVisibleItems() as $orderItem) {
             /** @var \Magento\Sales\Model\Order\Item $orderItem */
@@ -1200,14 +1200,14 @@ class Cron
                 continue;
             }
 
-            $preOrderQtys[$orderItem->getItemId()] = $orderItem->getQtyOrdered();
+            $invoiceQtys[$orderItem->getItemId()] = $orderItem->getQtyOrdered();
         }
 
         if ($transactionAmount != $paymentAmount) {
             return false;
         }
 
-        return $preOrderQtys;
+        return $invoiceQtys;
     }
 
     /**
