@@ -1182,11 +1182,11 @@ class Cron
 
         $additionalInfo = $transaction->getAdditionalInformation();
 
-        if (!isset($additionalInfo['pre_order_items'])) {
+        if (!isset($additionalInfo['items'])) {
             return false;
         }
 
-        $preOrderItemIds = $additionalInfo['pre_order_items'];
+        $preOrderItemIds = $additionalInfo['items'];
 
         $preOrderQtys = [];
         $prePaidAmount = $this->_order->getGrandTotal();
@@ -1199,8 +1199,8 @@ class Cron
                 }
             }
 
-            if (count(array_intersect($checkItemIds, $preOrderItemIds)) > 0) {
-                // Pre-order item, don't invoice directly
+            if (array_diff($checkItemIds, $preOrderItemIds)) {
+                // Item not specified in additional data, don't invoice directly
                 $prePaidAmount -= $orderItem->getRowTotalInclTax();
 
                 continue;
