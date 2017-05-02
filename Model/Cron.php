@@ -1183,25 +1183,19 @@ class Cron
         $additionalInfo = $transaction->getAdditionalInformation();
 
         if (!isset($additionalInfo['items'])) {
+            // Invoice all items, proceed as usual
             return false;
         }
 
-        $preOrderItemIds = $additionalInfo['items'];
+        $transactionItems = $additionalInfo['items'];
 
         $preOrderQtys = [];
-        $prePaidAmount = $this->_order->getGrandTotal();
+        $transactionAmount = $this->_order->getGrandTotal();
         foreach ($this->_order->getAllVisibleItems() as $orderItem) {
             /** @var \Magento\Sales\Model\Order\Item $orderItem */
-            $checkItemIds = [$orderItem->getQuoteItemId()];
-            foreach ($orderItem->getChildrenItems() as $childItem) {
-                if ($childItem->getData('is_pre_order')) {
-                    $checkItemIds[] = $childItem->getQuoteItemId();
-                }
-            }
-
-            if (array_diff($checkItemIds, $preOrderItemIds)) {
-                // Item not specified in additional data, don't invoice directly
-                $prePaidAmount -= $orderItem->getRowTotalInclTax();
+            if (!in_array($orderItem->getQuoteItemId(), $transactionItems)) {
+                // Item not specified in additional data, don't invoice
+                $transactionAmount -= $orderItem->getRowTotalInclTax();
 
                 continue;
             }
@@ -1209,7 +1203,7 @@ class Cron
             $preOrderQtys[$orderItem->getItemId()] = $orderItem->getQtyOrdered();
         }
 
-        if ($prePaidAmount != $paymentAmount) {
+        if ($transactionAmount != $paymentAmount) {
             return false;
         }
 
