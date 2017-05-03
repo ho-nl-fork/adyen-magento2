@@ -1153,7 +1153,7 @@ class Cron
         $invoiceQtys = $this->_getInvoiceQtys($amount);
 
         if ($this->_isTotalAmount($paymentObj->getEntityId(), $orderCurrencyCode) || is_array($invoiceQtys)) {
-            $this->_createInvoice($invoiceQtys);
+            $this->_createInvoice($invoiceQtys, $this->_isPreOrder());
         } else {
             $this->_adyenLogger->addAdyenNotificationCronjob(
                 'This is a partial AUTHORISATION and the full amount is not reached'
@@ -1162,9 +1162,26 @@ class Cron
     }
 
     /**
-     * Check if order contains pre-order items, returns false if not, returns all order item quantities to invoice
-     * without pre-order items if payment transaction contains pre-order items and the paid amount corresponds to
-     * the grand total of the order minus the pre-order product row totals
+     * Check if order contains pre-order items
+     * Must be called before creating invoice, since all items are unmarked as pre-order after first invoice creation
+     *
+     * @return bool
+     */
+    private function _isPreOrder()
+    {
+        foreach ($this->_order->getAllItems() as $item) {
+            if ($item->getIsPreOrder()) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if transaction contains items, returns false if not, returns all item quantities to invoice
+     * if payment transaction contains items and the paid amount corresponds to the grand total
+     * of the order minus the item row totals that are not specified in the transaction
      *
      * @param $paymentAmount
      * @return array|bool
@@ -1421,11 +1438,12 @@ class Cron
 
     /**
      * @param array|bool $quantities
+     * @param bool $isPreOrder
      * @throws Exception
      * @throws \Magento\Framework\Exception\LocalizedException
      * @return void
      */
-    protected function _createInvoice($quantities = false)
+    protected function _createInvoice($quantities = false, $isPreOrder = false)
     {
         $this->_adyenLogger->addAdyenNotificationCronjob('Creating invoice for order');
 
@@ -1472,7 +1490,7 @@ class Cron
                 throw new Exception(sprintf('Error saving invoice. The error message is:', $e->getMessage()));
             }
 
-            $this->_setPaymentAuthorized();
+            $this->_setPaymentAuthorized(true, false, $isPreOrder);
 
             $invoiceAutoMail = (bool) $this->_getConfigData(
                 'send_invoice_update_mail', 'adyen_abstract', $this->_order->getStoreId()
@@ -1481,7 +1499,12 @@ class Cron
             if ($invoiceAutoMail) {
                 $invoice->sendEmail();
             }
-        } else {
+        }
+        elseif ($quantities) {
+            $this->_adyenLogger->addAdyenNotificationCronjob('Invoice is already created, only authorizing payment');
+            $this->_setPaymentAuthorized(true, false, $isPreOrder);
+        }
+        else {
             $this->_adyenLogger->addAdyenNotificationCronjob('It is not possible to create invoice for this order');
         }
     }
@@ -1489,9 +1512,10 @@ class Cron
     /**
      * @param bool $manualReviewComment
      * @param bool $createInvoice
+     * @param bool $isPreOrder
      * @throws Exception
      */
-    protected function _setPaymentAuthorized($manualReviewComment = true, $createInvoice = false)
+    protected function _setPaymentAuthorized($manualReviewComment = true, $createInvoice = false, $isPreOrder = false)
     {
         $this->_adyenLogger->addAdyenNotificationCronjob('Set order to authorised');
 
@@ -1508,13 +1532,7 @@ class Cron
             $this->_createInvoice();
         }
 
-        $statusPath = 'payment_authorized';
-        foreach ($this->_order->getAllVisibleItems() as $item) {
-            if ($item->getIsPreOrder()) {
-                $statusPath = 'payment_authorized_pre_order';
-                break;
-            }
-        }
+        $statusPath = $isPreOrder ? 'payment_authorized_pre_order' : 'payment_authorized';
 
         $status = $this->_getConfigData(
             $statusPath, 'adyen_abstract', $this->_order->getStoreId()
