@@ -27,6 +27,7 @@ use Magento\Framework\Api\SearchCriteriaBuilder;
 use Magento\Framework\Webapi\Exception;
 use Magento\Sales\Api\OrderPaymentRepositoryInterface;
 use Magento\Sales\Api\TransactionRepositoryInterface;
+use Magento\Sales\Model\Order;
 use Magento\Sales\Model\Order\Email\Sender\OrderSender;
 
 class Cron
@@ -1592,6 +1593,10 @@ class Cron
                 $status = $fraudManualReviewStatus;
                 $comment = "Adyen Payment is in Manual Review check the Adyen platform";
             }
+        }
+
+        if (!empty($status)) {
+            $this->_order->setState(Order::STATE_PROCESSING);
         }
 
         $status = (!empty($status)) ? $status : $this->_order->getStatus();
