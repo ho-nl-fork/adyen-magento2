@@ -226,6 +226,25 @@
                 <!-- /ko -->
 
 
+                <!-- ko if: (mustCreateBillingAgreement())-->
+
+                <div class="field choice">
+                    <input type="checkbox"
+                           name="payment[store_cc]"
+                           autocomplete="off"
+                           class="checkbox"
+                           data-bind="attr: {title: $t('I understand this is a pre-order, and consent to the full amount being automatically collected')}, checked: setStoreCc"
+                           data-validate="{required:true}"
+                    />
+                    <label data-bind="attr: {for: getCode() + '_remember_details'}" class="label">
+                        <span><!-- ko text: $t('I understand this is a pre-order, and consent to the full amount being automatically collected')--><!-- /ko --></span>
+                    </label>
+                </div>
+
+                <!-- /ko -->
+
+
+                <!-- ko ifnot: (mustCreateBillingAgreement())-->
                 <!-- ko if: (canCreateBillingAgreement())-->
 
                 <div class="field choice">
@@ -240,6 +259,7 @@
                     </label>
                 </div>
 
+                <!-- /ko -->
                 <!-- /ko -->
 
 

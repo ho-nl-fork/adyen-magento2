@@ -192,6 +192,12 @@ define(
                 }
                 return false;
             },
+            mustCreateBillingAgreement: function() {
+                if (window.checkoutConfig.quoteData.pay_on_shipment > 0) {
+                    return true;
+                }
+                return false;
+            },
             isShowLegend: function() {
                 return true;
             },
