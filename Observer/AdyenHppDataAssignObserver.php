@@ -36,6 +36,7 @@ class AdyenHppDataAssignObserver extends AbstractDataAssignObserver
     const GENDER = 'gender';
     const DOB = 'dob';
     const TELEPHONE = 'telephone';
+    const DF_VALUE = 'df_value';
 
 
     /**
@@ -46,7 +47,8 @@ class AdyenHppDataAssignObserver extends AbstractDataAssignObserver
         self::ISSUER_ID,
         self::GENDER,
         self::DOB,
-        self::TELEPHONE
+        self::TELEPHONE,
+        self::DF_VALUE
     ];
 
     /**
@@ -63,6 +65,10 @@ class AdyenHppDataAssignObserver extends AbstractDataAssignObserver
         }
 
         $paymentInfo = $this->readPaymentModelArgument($observer);
+        
+        if (isset($additionalData[self::BRAND_CODE])) {
+            $paymentInfo->setCcType($additionalData[self::BRAND_CODE]);
+        }
 
         foreach ($this->additionalInformationList as $additionalInformationKey) {
             if (isset($additionalData[$additionalInformationKey])) {
@@ -70,7 +76,7 @@ class AdyenHppDataAssignObserver extends AbstractDataAssignObserver
                     $additionalInformationKey,
                     $additionalData[$additionalInformationKey]
                 );
+                }
             }
         }
     }
-}

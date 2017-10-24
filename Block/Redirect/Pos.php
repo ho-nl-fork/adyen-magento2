@@ -27,10 +27,6 @@ use Symfony\Component\Config\Definition\Exception\Exception;
 
 class Pos extends \Magento\Payment\Block\Form
 {
-    /**
-     * quest prefix
-     */
-    const GUEST_ID = 'customer_';
 
     protected $_orderFactory;
     /**
@@ -53,6 +49,12 @@ class Pos extends \Magento\Payment\Block\Form
      */
     protected $_adyenLogger;
 
+    /**
+     * Currency factory
+     *
+     * @var \Magento\Directory\Model\CurrencyFactory
+     */
+    protected $_currencyFactory;
 
     /**
      * Pos constructor.
@@ -70,7 +72,8 @@ class Pos extends \Magento\Payment\Block\Form
         \Magento\Sales\Model\OrderFactory $orderFactory,
         \Magento\Checkout\Model\Session $checkoutSession,
         \Adyen\Payment\Helper\Data $adyenHelper,
-        \Adyen\Payment\Logger\AdyenLogger $adyenLogger
+        \Adyen\Payment\Logger\AdyenLogger $adyenLogger,
+        \Magento\Directory\Model\CurrencyFactory $currencyFactory
     ) {
         $this->_orderFactory = $orderFactory;
         $this->_checkoutSession = $checkoutSession;
@@ -79,6 +82,7 @@ class Pos extends \Magento\Payment\Block\Form
         $this->_request = $context->getRequest();
         $this->_adyenHelper = $adyenHelper;
         $this->_adyenLogger = $adyenLogger;
+        $this->_currencyFactory = $currencyFactory;
 
         if (!$this->_order) {
             $incrementId = $this->_getCheckout()->getLastRealOrderId();
@@ -101,7 +105,7 @@ class Pos extends \Magento\Payment\Block\Form
     {
         $launchlink = "";
         try {
-            if($this->_order->getPayment())
+            if ($this->_order->getPayment())
             {
 
                 $realOrderId            = $this->_order->getRealOrderId();
@@ -118,13 +122,13 @@ class Pos extends \Magento\Payment\Block\Form
                 $currencyCode           = $orderCurrencyCode;
                 $paymentAmount          = $amount;
                 $merchantReference      = $realOrderId;
-                $shopperReference       = (!empty($customerId)) ? $customerId : self::GUEST_ID . $realOrderId;
-                $shopperEmail           = $shopperEmail;
 
                 $recurringParams = "";
-                if ($this->_order->getPayment()->getAdditionalInformation("store_cc") != "") {
+                if ($this->_order->getPayment()->getAdditionalInformation("store_cc") != ""
+                    && $customerId > 0
+                ) {
                     $recurringParams = "&recurringContract=" . urlencode($recurringContract) . "&shopperReference=" .
-                        urlencode($shopperReference) . "&shopperEmail=" . urlencode($shopperEmail);
+                        urlencode($customerId) . "&shopperEmail=" . urlencode($shopperEmail);
                 }
 
                 $receiptOrderLines = "";
@@ -138,9 +142,10 @@ class Pos extends \Magento\Payment\Block\Form
                     $paymentAmount. "&originalCustomMerchantReference=".
                     $merchantReference . "&originalCustomSessionId=".session_id());
 
-                $launchlink = "adyen://payment?sessionId=".session_id()."&amount=".$paymentAmount.
-                    "&currency=".$currencyCode."&merchantReference=".$merchantReference. $recurringParams .
-                    $receiptOrderLines .  "&callback=".$callbackUrl . $extraParamaters;
+                // Cash you can trigger by adding transactionType=CASH
+                $launchlink = "adyen://payment?sessionId=".session_id() .
+                    "&amount=".$paymentAmount."&currency=".$currencyCode."&merchantReference=".$merchantReference .
+                    $recurringParams . $receiptOrderLines .  "&callback=".$callbackUrl . $extraParamaters;
 
                 // cash not working see ticket
                 // https://youtrack.is.adyen.com/issue/IOS-130#comment=102-20285
@@ -253,6 +258,7 @@ class Pos extends \Magento\Payment\Block\Form
         $myReceiptOrderLines .= "---||C\n".
             "====== YOUR PAYMENT DETAILS ======||CB\n".
             "---||C\n";
+
 
         return $myReceiptOrderLines;
     }

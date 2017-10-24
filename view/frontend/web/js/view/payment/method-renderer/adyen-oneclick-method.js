@@ -37,6 +37,7 @@ define(
     ],
     function (ko, _, $, Component, placeOrderAction, $t, additionalValidators, selectPaymentMethodAction, quote, checkoutData) {
         'use strict';
+        var updatedExpiryDate = false;
         var recurringDetailReference = ko.observable(null);
         var paymentMethod = ko.observable(null);
         return Component.extend({
@@ -80,32 +81,39 @@ define(
                     event.preventDefault();
                 }
 
-                var cse_key = this.getCSEKey();
-                var options = { enableValidations: false};
-
-                var cseInstance = adyen.encrypt.createEncryption(cse_key, options);
-                var generationtime = self.getGenerationTime();
-
-                var cardData = {
-                    cvc : self.creditCardVerificationNumber,
-                    expiryMonth : self.creditCardExpMonth(),
-                    expiryYear : self.creditCardExpYear(),
-                    generationtime : generationtime
-                };
-
-                var encryptedData = cseInstance.encrypt(cardData);
-
-                // set payment method to adyen_hpp
                 var  data = {
                     "method": self.method,
-                    "po_number": null,
                     "additional_data": {
-                        encrypted_data: encryptedData,
-                        recurring_detail_reference: self.value,
                         variant: self.agreement_data.variant,
-                        number_of_installments: self.installment
+                        recurring_detail_reference: self.value
                     }
-                };
+                }
+
+                // only use CSE and installments for cards
+                if (self.agreement_data.card) {
+
+                    var generationtime = self.getGenerationTime();
+
+                    var cardData = {
+                        cvc : self.creditCardVerificationNumber,
+                        expiryMonth : self.creditCardExpMonth(),
+                        expiryYear : self.creditCardExpYear(),
+                        generationtime : generationtime
+                    };
+
+                    if(updatedExpiryDate || self.hasVerification()){
+
+                        var options = { enableValidations: false};
+                        var cse_key = this.getCSEKey();
+                        var cseInstance = adyen.encrypt.createEncryption(cse_key, options);
+                        var encryptedData = cseInstance.encrypt(cardData);
+                        data.additional_data.encrypted_data = encryptedData;
+                    }
+
+
+                    // set payment method to adyen_hpp
+                    data.additional_data.number_of_installments = self.installment;
+                }
 
                 if (this.validate() && additionalValidators.validate()) {
                     //this.isPlaceOrderActionAllowed(false);
@@ -140,7 +148,7 @@ define(
 
                     var creditCardExpMonth, creditCardExpYear = false;
                     if(value.agreement_data.card) {
-                        creditCardExpMonth = value.agreement_data.card.expiryMonth
+                        creditCardExpMonth = value.agreement_data.card.expiryMonth;
                         creditCardExpYear =  value.agreement_data.card.expiryYear;
                     }
 
@@ -177,6 +185,9 @@ define(
                         getGenerationTime: function() {
                             return window.checkoutConfig.payment.adyenCc.generationTime;
                         },
+                        hasVerification: function() {
+                            return window.checkoutConfig.payment.adyenOneclick.hasCustomerInteraction;
+                        },
                         validate: function () {
 
                             var code = self.item.method;
@@ -189,13 +200,13 @@ define(
 
                             // if oneclick or recurring is a card do validation on expiration date
                             if(this.agreement_data.card) {
-                                // add extra validation because jqeury validation will not work on non name attributes
+                                // add extra validation because jquery validation will not work on non name attributes
                                 var expiration = Boolean($(form + ' #' + codeValue + '_expiration').valid());
                                 var expiration_yr = Boolean($(form + ' #' + codeValue + '_expiration_yr').valid());
 
                                 // only check if recurring type is set to oneclick
                                 var cid = true;
-                                if(self.hasVerification()) {
+                                if(this.hasVerification()) {
                                     var cid = Boolean($(form + ' #' + codeValue + '_cc_cid').valid());
                                 }
                             } else {
@@ -211,6 +222,7 @@ define(
                             return true;
                         },
                         selectExpiry: function() {
+                            updatedExpiryDate = true;
                             var self = this;
                             self.expiry(true);
                             return true;
@@ -221,6 +233,8 @@ define(
             },
             selectBillingAgreement: function() {
                 var self = this;
+                self.expiry(false);
+                updatedExpiryDate = false;
 
                 // set payment method data
                 var  data = {
@@ -253,9 +267,6 @@ define(
                 }
                 return null;
             }),
-            hasVerification: function() {
-                return window.checkoutConfig.payment.adyenOneclick.hasCustomerInteraction;
-            },
             getPlaceOrderUrl: function() {
                 return window.checkoutConfig.payment.iframe.placeOrderUrl[this.getCode()];
             }

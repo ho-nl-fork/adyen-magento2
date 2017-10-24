@@ -89,10 +89,11 @@ class Validate3d extends \Magento\Framework\App\Action\Action
 
         if ($order->getPayment()) {
             $active = $order->getPayment()->getAdditionalInformation('3dActive');
+            $success = $order->getPayment()->getAdditionalInformation('3dSuccess');
         }
 
         // check if 3D secure is active. If not just go to success page
-        if ($active) {
+        if ($active && $success != true) {
 
             $this->_adyenLogger->addAdyenResult("3D secure is active");
 
@@ -131,9 +132,10 @@ class Validate3d extends \Magento\Framework\App\Action\Action
                         $order->addStatusHistoryComment(__('3D-secure validation was successful'))->save();
                         // set back to false so when pressed back button on the success page it will reactivate 3D secure
                         $order->getPayment()->setAdditionalInformation('3dActive', '');
+                        $order->getPayment()->setAdditionalInformation('3dSuccess', true);
                         $this->_orderRepository->save($order);
 
-                        $this->_redirect('checkout/onepage/success', ['utm_nooverride' => '1']);
+                        $this->_redirect('checkout/onepage/success', ['_query' => ['utm_nooverride' => '1']]);
                     } else {
                         $order->addStatusHistoryComment(__('3D-secure validation was unsuccessful.'))->save();
 
@@ -162,7 +164,7 @@ class Validate3d extends \Magento\Framework\App\Action\Action
                 $this->_view->renderLayout();
             }
         } else {
-            $this->_redirect('checkout/onepage/success/', ['utm_nooverride' => '1']);
+            $this->_redirect('checkout/onepage/success', ['_query' => ['utm_nooverride' => '1']]);
         }
     }
 

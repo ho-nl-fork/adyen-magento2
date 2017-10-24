@@ -48,6 +48,7 @@ class Notification extends \Magento\Framework\Model\AbstractModel
     const RECURRING_CONTRACT = "RECURRING_CONTRACT";
     const REPORT_AVAILABLE = "REPORT_AVAILABLE";
     const ORDER_CLOSED = "ORDER_CLOSED";
+    const OFFER_CLOSED = "OFFER_CLOSED";
 
     /**
      * Notification constructor.
@@ -84,11 +85,12 @@ class Notification extends \Magento\Framework\Model\AbstractModel
      * @param $pspReference
      * @param $eventCode
      * @param $success
+     * @param $originalReference
      * @return bool (true if the notification is a duplicate)
      */
-    public function isDuplicate($pspReference, $eventCode, $success)
+    public function isDuplicate($pspReference, $eventCode, $success, $originalReference)
     {
-        $result = $this->getResource()->getNotification($pspReference, $eventCode, $success);
+        $result = $this->getResource()->getNotification($pspReference, $eventCode, $success, $originalReference);
         return (empty($result)) ? false : true;
     }
     

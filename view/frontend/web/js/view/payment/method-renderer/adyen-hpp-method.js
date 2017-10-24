@@ -35,12 +35,14 @@ define(
         'Magento_Checkout/js/model/url-builder',
         'Adyen_Payment/js/model/adyen-payment-service',
         'Magento_Customer/js/model/customer',
-        'Magento_Checkout/js/model/full-screen-loader'
+        'Magento_Checkout/js/model/full-screen-loader',
+        'adyen/df'
     ],
-    function (ko, $, Component, setPaymentMethodAction, selectPaymentMethodAction, quote, checkoutData, additionalValidators, storage, urlBuilder, adyenPaymentService, customer, fullScreenLoader) {
+    function (ko, $, Component, setPaymentMethodAction, selectPaymentMethodAction, quote, checkoutData, additionalValidators, storage, urlBuilder, adyenPaymentService, customer, fullScreenLoader, deviceFingerprint) {
         'use strict';
         var brandCode = ko.observable(null);
         var paymentMethod = ko.observable(null);
+        var dfValue = ko.observable(null);
 
         return Component.extend({
             self: this,
@@ -55,11 +57,13 @@ define(
                         'issuerId',
                         'gender',
                         'dob',
-                        'telephone'
+                        'telephone',
+                        'dfValue'
                     ]);
                 return this;
             },
             initialize: function () {
+                var self = this;
                 this._super();
 
                 fullScreenLoader.startLoader();
@@ -70,7 +74,6 @@ define(
                 // retrieve payment methods
                 var serviceUrl,
                     payload;
-
                 if(customer.isLoggedIn()) {
                     serviceUrl = urlBuilder.createUrl('/carts/mine/retrieve-adyen-payment-methods', {});
                 } else {
@@ -89,6 +92,28 @@ define(
                 ).done(
                     function (response) {
                         adyenPaymentService.setPaymentMethods(response);
+                        if(JSON.stringify(response).indexOf("ratepay") > -1) {
+                            var ratePayId = window.checkoutConfig.payment.adyenHpp.ratePayId;
+                            window.di = {t: '', v: ratePayId, l: 'Checkout'};
+                            function waitForDfValue() {
+                                var dfValueRatePay = self.getRatePayDeviceIdentToken();
+                                if (dfValueRatePay) {
+                                    window.di.t = dfValueRatePay.replace(':', '');
+                                    var scriptTag = document.createElement('script');
+                                    scriptTag.src = "//d.ratepay.com/" + ratePayId + "/di.js";
+                                    scriptTag.type = "text/javascript";
+                                    document.body.appendChild(scriptTag);
+                                } else {
+                                    setTimeout(waitForDfValue, 200);
+                                }
+                            }
+                            waitForDfValue();
+                        }
+                        // set device fingerprint value
+                        dfSet('dfValue', 0);
+                        // propagate this manually to knockoutjs otherwise it would not work
+                        dfValue($('#dfValue').val());
+
                         fullScreenLoader.stopLoader();
                     }
                 ).fail(function(error) {
@@ -98,7 +123,6 @@ define(
             },
             getAdyenHppPaymentMethods: function() {
                 var self = this;
-
                 var paymentMethods = adyenPaymentService.getAvailablePaymentMethods();
 
                 var paymentList = _.map(paymentMethods, function(value) {
@@ -114,7 +138,6 @@ define(
                         return self.validate();
                     }
 
-
                     if(value.brandCode == "ideal") {
                         result.issuerIds = value.issuers;
                         result.issuerId = ko.observable(null);
@@ -126,6 +149,9 @@ define(
                     }
                     result.isPaymentMethodOpenInvoiceMethod = function() {
                         return value.isPaymentMethodOpenInvoiceMethod;
+                    }
+                    result.getRatePayDeviceIdentToken = function() {
+                        return window.checkoutConfig.payment.adyenHpp.deviceIdentToken;
                     }
                     return result;
                 });
@@ -155,20 +181,22 @@ define(
 
                 if (this.validate() && additionalValidators.validate()) {
 
-
                     var data = {};
                     data.method = self.method;
-                    data.po_number = null;
 
                     var additionalData = {};
                     additionalData.brand_code = self.value;
+                    additionalData.df_value = dfValue();
 
                     if(brandCode() == "ideal") {
                         additionalData.issuer_id = this.issuerId();
-                    } else if(brandCode() == "klarna") {
+                    } else if(self.isPaymentMethodOpenInvoiceMethod()) {
                         additionalData.gender = this.gender();
                         additionalData.dob = this.dob();
                         additionalData.telephone = this.telephone();
+                        if(brandCode() == "ratepay"){
+                            additionalData.df_value = this.getRatePayDeviceIdentToken();
+                        }
                     }
 
                     data.additional_data = additionalData;
@@ -187,7 +215,7 @@ define(
                     "method": self.method,
                     "po_number": null,
                     "additional_data": {
-                        brand_code: self.value,
+                        brand_code: self.value
                     }
                 };
 
@@ -205,7 +233,7 @@ define(
             isBrandCodeChecked: ko.computed(function () {
 
                 if(!quote.paymentMethod()) {
-                  return null;
+                    return null;
                 }
 
                 if(quote.paymentMethod().method == paymentMethod()) {
@@ -230,6 +258,9 @@ define(
             },
             validate: function () {
                 return true;
+            },
+            getRatePayDeviceIdentToken: function(){
+                return window.checkoutConfig.payment.adyenHpp.deviceIdentToken;
             }
         });
     }

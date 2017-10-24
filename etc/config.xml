@@ -64,7 +64,7 @@
             <adyen_oneclick>
                 <active>1</active>
                 <model>AdyenPaymentOneclickFacade</model>
-                <title>Adyen OneClick</title>
+                <title>Adyen Stored Payment Methods</title>
                 <allowspecific>0</allowspecific>
                 <sort_order>1</sort_order>
                 <cctypes>AE,VI,MC,DI</cctypes> <!-- important to show the payment method isAvailabe()-->
@@ -96,9 +96,8 @@
                 <payment_routine>single</payment_routine>
                 <delivery_days>5</delivery_days>
                 <allowspecific>0</allowspecific>
+                <ratepay_id>oj9GsQ</ratepay_id>
                 <sort_order>3</sort_order>
-                <place_order_url>adyen/process/redirect</place_order_url>
-                <order_place_redirect_url>adyen/process/redirect</order_place_redirect_url>
                 <payment_action>order</payment_action>
                 <can_initialize>1</can_initialize>
                 <is_gateway>1</is_gateway>
@@ -138,8 +137,6 @@
                 <title>Adyen POS</title>
                 <allowspecific>0</allowspecific>
                 <sort_order>5</sort_order>
-                <place_order_url>adyen/process/redirect</place_order_url>
-                <order_place_redirect_url>adyen/process/redirect</order_place_redirect_url>
                 <payment_action>order</payment_action>
                 <can_initialize>1</can_initialize>
                 <is_gateway>1</is_gateway>
@@ -195,5 +192,12 @@
                 <group>adyen</group>
             </adyen_boleto>
         </payment>
+        <dev>
+            <js>
+                <minify_exclude>
+                    live.adyen.com/hpp/js/df
+                </minify_exclude>
+            </js>
+        </dev>
     </default>
 </config>

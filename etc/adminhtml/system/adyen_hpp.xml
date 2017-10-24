@@ -45,13 +45,13 @@
         </field>
         <field id="hmac_test" translate="label" type="obscure" sortOrder="50" showInDefault="1" showInWebsite="1" showInStore="1">
             <label>HMAC Key for Test</label>
-            <tooltip>Copy and paste the HMAC key of the skin you want to use from Test Customer Area => Skins. => click on [skin code] => Edit => HMAC for Test platform. Currently, only the older SHA-1 HMAC calculation method is supported in this plugin.</tooltip>
+            <tooltip>Copy and paste the HMAC key of the skin you want to use from Test Customer Area => Skins. => click on [skin code] => Edit => HMAC for Test platform.</tooltip>
             <backend_model>Magento\Config\Model\Config\Backend\Encrypted</backend_model>
             <config_path>payment/adyen_hpp/hmac_test</config_path>
         </field>
         <field id="hmac_live" translate="label" type="obscure" sortOrder="60" showInDefault="1" showInWebsite="1" showInStore="1">
             <label>HMAC Key for Live</label>
-            <tooltip>Copy and paste the HMAC key of the skin you want to use from Test Customer Area => Skins. => click on [skin code] => Edit => HMAC for Live platform. Currently, only the older SHA-1 HMAC calculation method is supported in this plugin.</tooltip>
+            <tooltip>Copy and paste the HMAC key of the skin you want to use from Test Customer Area => Skins. => click on [skin code] => Edit => HMAC for Live platform.</tooltip>
             <backend_model>Magento\Config\Model\Config\Backend\Encrypted</backend_model>
             <config_path>payment/adyen_hpp/hmac_live</config_path>
         </field>
@@ -78,6 +78,11 @@
                 <tooltip>If you do not want to send the second line address field to Klarna set this setting to 'Yes'</tooltip>
                 <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
                 <config_path>payment/adyen_hpp/ignore_second_address_field</config_path>
+            </field>
+            <field id="ratepay_id" translate="label" type="text" sortOrder="50" showInDefault="1" showInWebsite="1" showInStore="1">
+                <label>RatePAY Device Ident SId</label>
+                <tooltip>Unique RatePAY Id provided by RatePAY integration consultant</tooltip>
+                <config_path>payment/adyen_hpp/ratepay_id</config_path>
             </field>
         </group>
         <group id="adyen_hpp_advanced_settings" translate="label" showInDefault="1" showInWebsite="1" sortOrder="200">
