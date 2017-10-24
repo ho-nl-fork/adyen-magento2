@@ -615,9 +615,7 @@ class Cron
 
         $payment = $this->_order->getPayment();
 
-        if (!is_null($payment->getAdyenPspReference())
-            && $this->_pspReference != $payment->getAdyenPspReference()
-        ) {
+        if ($payment->getAdyenPspReference() !== null && $this->_pspReference != $payment->getAdyenPspReference()) {
             // Load subsequent payment of order
             $criteria = $this->searchCriteriaBuilder
                 ->addFilter('adyen_psp_reference', $this->_pspReference)
@@ -626,7 +624,7 @@ class Cron
             $payments = $this->orderPaymentRepository->getList($criteria->create())->getItems();
             $payment = reset($payments);
 
-            if (!$payment->getEntityId()) {
+            if (!$payment || !$payment->getEntityId()) {
                 throw new Exception(__('Error processing notification; no payment found with PSP reference %1', $this->_pspReference));
             }
         }
