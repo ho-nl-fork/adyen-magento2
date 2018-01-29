@@ -128,6 +128,15 @@ define(
             isActive: function() {
                 return true;
             },
+
+            /**
+            * Returns state of place order button
+            * @returns {boolean}
+            */
+            isButtonActive: function() {
+              return this.isActive() && this.getCode() == this.isChecked() && this.isPlaceOrderActionAllowed();
+            },
+
             /**
              * @override
              */
@@ -135,6 +144,7 @@ define(
                 var self = this,
                     placeOrder;
 
+                self.isPlaceOrderActionAllowed(false);
                 if (event) {
                     event.preventDefault();
                 }
@@ -158,14 +168,16 @@ define(
                 self.encryptedData(data);
 
                 if (this.validate() && additionalValidators.validate()) {
-                    this.isPlaceOrderActionAllowed(false);
                     placeOrder = placeOrderAction(this.getData(), this.redirectAfterPlaceOrder);
 
                     $.when(placeOrder).fail(function(response) {
                         self.isPlaceOrderActionAllowed(true);
                     });
                     return true;
+                } else {
+                  self.isPlaceOrderActionAllowed(true);
                 }
+
                 return false;
             },
             getControllerName: function() {
