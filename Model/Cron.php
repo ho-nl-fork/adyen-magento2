@@ -1286,17 +1286,20 @@ class Cron
         $transactionItems = $additionalInfo['items'];
 
         $invoiceQtys = [];
-        $transactionAmount = $this->_order->getGrandTotal();
+        $transactionAmount = 0;
         foreach ($this->_order->getAllVisibleItems() as $orderItem) {
             /** @var \Magento\Sales\Model\Order\Item $orderItem */
             if (!in_array($orderItem->getQuoteItemId(), $transactionItems)) {
                 // Item not specified in additional data, don't invoice
-                $transactionAmount -= $orderItem->getRowTotalInclTax();
-
                 continue;
             }
 
+            $transactionAmount += $orderItem->getRowTotalInclTax();
             $invoiceQtys[$orderItem->getItemId()] = $orderItem->getQtyOrdered();
+        }
+
+        if ($this->_isPreOrder()) {
+            $transactionAmount += $this->_order->getShippingInclTax();
         }
 
         if ($transactionAmount != $paymentAmount) {
