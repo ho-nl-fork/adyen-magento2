@@ -660,7 +660,11 @@ class Cron
 
         $payment = $this->_order->getPayment();
 
-        if ($payment->getAdyenPspReference() !== null && $this->_pspReference != $payment->getAdyenPspReference()) {
+        $preOrderMode = $this->_getConfigData('pre_order_mode', 'adyen_abstract', $this->_order->getStoreId());
+
+        if ($preOrderMode == \Ho\PreOrder\Model\Config\Source\PreOrderMode::PRE_ORDER_MODE_RECURRING
+            && $payment->getAdyenPspReference() !== null && $this->_pspReference != $payment->getAdyenPspReference()
+        ) {
             // Load subsequent payment of order
             $criteria = $this->searchCriteriaBuilder
                 ->addFilter('adyen_psp_reference', $this->_pspReference)
