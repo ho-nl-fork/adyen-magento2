@@ -31,9 +31,6 @@ class Installments extends \Magento\Config\Block\System\Config\Form\Field\FieldA
      */
     protected $_installmentRenderer = null;
 
-    /**
-     * @var \Magento\Braintree\Block\Adminhtml\Form\Field\CcTypes
-     */
     protected $_ccTypesRenderer = null;
 
     /**
@@ -56,8 +53,9 @@ class Installments extends \Magento\Config\Block\System\Config\Form\Field\FieldA
 
     /**
      * Returns renderer for country element
-     * 
-     * @return \Magento\Braintree\Block\Adminhtml\Form\Field\Cctypes
+     *
+     * @return \Magento\Framework\View\Element\BlockInterface|null
+     * @throws \Magento\Framework\Exception\LocalizedException
      */
     protected function getCcTypesRenderer()
     {
@@ -80,14 +78,14 @@ class Installments extends \Magento\Config\Block\System\Config\Form\Field\FieldA
         $this->addColumn(
             'amount',
             [
-                'label'     => __('Amount Range (minor units)'),
+                'label'     => __('Amount Range'),
                 'renderer'  => false,
             ]
         );
         $this->addColumn(
             'installments',
             [
-                'label'     => __('Max Number Of Installments'),
+                'label'     => __('Number Of Installments'),
                 'renderer'  => $this->getNumberOfInstallmentsRenderer(),
             ]
         );

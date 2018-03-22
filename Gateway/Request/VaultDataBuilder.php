@@ -21,15 +21,34 @@
  * Author: Adyen <magento@adyen.com>
  */
 
-namespace Adyen\Payment\Model\Resource\Notification;
+namespace Adyen\Payment\Gateway\Request;
 
-class Collection extends \Magento\Framework\Model\ResourceModel\Db\Collection\AbstractCollection
+use Magento\Payment\Gateway\Request\BuilderInterface;
+
+class VaultDataBuilder implements BuilderInterface
 {
+
     /**
-     * Construct
+     * Additional options in request to gateway
      */
-    public function _construct()
+    const OPTIONS = 'options';
+
+    /**
+     * The option that determines whether the payment method associated with
+     * the successful transaction should be stored in the Vault.
+     */
+    const STORE_IN_VAULT_ON_SUCCESS = 'storeInVaultOnSuccess';
+
+    /**
+     * @inheritdoc
+     */
+    public function build(array $buildSubject)
     {
-        $this->_init('Adyen\Payment\Model\Notification', 'Adyen\Payment\Model\Resource\Notification');
+
+        // indicates if the user want to store it or not
+        // ignore for now
+        // needs to define if we need to store it as oneclick or recurring
+        $request = [];
+        return $request;
     }
 }

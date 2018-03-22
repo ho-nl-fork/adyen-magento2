@@ -13,20 +13,17 @@
  *                               #############
  *                               ############
  *
- * Adyen Payment module (https://www.adyen.com/)
+ * Adyen Payment Module
  *
- * Copyright (c) 2015 Adyen BV (https://www.adyen.com/)
- * See LICENSE.txt for license details.
+ * Copyright (c) 2017 Adyen B.V.
+ * This file is open source and available under the MIT license.
+ * See the LICENSE file for more info.
  *
  * Author: Adyen <magento@adyen.com>
  */
 
-namespace Adyen\Payment\Model\Resource\Billing;
+namespace Adyen\Payment\Block\Info;
 
-/**
- * Billing agreement resource model
- */
-class Agreement extends \Magento\Paypal\Model\ResourceModel\Billing\Agreement
+class ApplePay extends Cc
 {
-
 }

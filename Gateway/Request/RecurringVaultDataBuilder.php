@@ -20,31 +20,32 @@
  *
  * Author: Adyen <magento@adyen.com>
  */
+namespace Adyen\Payment\Gateway\Request;
 
-namespace Adyen\Payment\Model\Resource\Billing\Agreement;
+use Magento\Payment\Gateway\Request\BuilderInterface;
 
-/**
- * Billing agreements resource collection
- */
-class Collection extends \Magento\Paypal\Model\ResourceModel\Billing\Agreement\Collection
+class RecurringVaultDataBuilder implements BuilderInterface
 {
 
     /**
-     * Collection initialization
-     *
-     * @return void
+     * @param array $buildSubject
+     * @return array
      */
-    protected function _construct()
+    public function build(array $buildSubject)
     {
-        $this->_init('Adyen\Payment\Model\Billing\Agreement', 'Magento\Paypal\Model\ResourceModel\Billing\Agreement');
-    }
+        $result = [];
+        $recurring = ['contract' => \Adyen\Payment\Model\RecurringType::RECURRING];
+        $result['recurring'] = $recurring;
 
-    /**
-     * @return $this
-     */
-    public function addActiveFilter()
-    {
-        $this->addFieldToFilter('status', \Magento\Paypal\Model\Billing\Agreement::STATUS_ACTIVE);
-        return $this;
+
+        /** @var \Magento\Payment\Gateway\Data\PaymentDataObject $paymentDataObject */
+        $paymentDataObject = \Magento\Payment\Gateway\Helper\SubjectReader::readPayment($buildSubject);
+        $payment = $paymentDataObject->getPayment();
+        $extensionAttributes = $payment->getExtensionAttributes();
+        $paymentToken = $extensionAttributes->getVaultPaymentToken();
+        
+        $result['selectedRecurringDetailReference'] = $paymentToken->getGatewayToken();
+        $result['shopperInteraction'] = 'ContAuth';
+        return $result;
     }
 }

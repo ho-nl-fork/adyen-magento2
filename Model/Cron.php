@@ -45,7 +45,7 @@ class Cron
     protected $_logger;
 
     /**
-     * @var Resource\Notification\CollectionFactory
+     * @var ResourceModel\Notification\CollectionFactory
      */
     protected $_notificationFactory;
 
@@ -92,7 +92,7 @@ class Cron
     protected $_billingAgreementFactory;
 
     /**
-     * @var Resource\Billing\Agreement\CollectionFactory
+     * @var ResourceModel\Billing\Agreement\CollectionFactory
      */
     protected $_billingAgreementCollectionFactory;
 
@@ -172,7 +172,7 @@ class Cron
     protected $_adyenOrderPaymentFactory;
 
     /**
-     * @var Resource\Order\Payment\CollectionFactory
+     * @var ResourceModel\Order\Payment\CollectionFactory
      */
     protected $_adyenOrderPaymentCollectionFactory;
 
@@ -201,17 +201,17 @@ class Cron
      *
      * @param \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig
      * @param \Adyen\Payment\Logger\AdyenLogger $adyenLogger
-     * @param Resource\Notification\CollectionFactory $notificationFactory
+     * @param ResourceModel\Notification\CollectionFactory $notificationFactory
      * @param \Magento\Sales\Model\OrderFactory $orderFactory
      * @param \Adyen\Payment\Helper\Data $adyenHelper
      * @param OrderSender $orderSender
      * @param InvoiceSender $invoiceSender
      * @param \Magento\Framework\DB\TransactionFactory $transactionFactory
      * @param Billing\AgreementFactory $billingAgreementFactory
-     * @param Resource\Billing\Agreement\CollectionFactory $billingAgreementCollectionFactory
+     * @param ResourceModel\Billing\Agreement\CollectionFactory $billingAgreementCollectionFactory
      * @param Api\PaymentRequest $paymentRequest
      * @param Order\PaymentFactory $adyenOrderPaymentFactory
-     * @param Resource\Order\Payment\CollectionFactory $adyenOrderPaymentCollectionFactory
+     * @param ResourceModel\Order\Payment\CollectionFactory $adyenOrderPaymentCollectionFactory
      * @param AreaList $areaList
      * @param TransactionRepositoryInterface $transactionRepository
      * @param SearchCriteriaBuilder $searchCriteriaBuilder
@@ -220,17 +220,17 @@ class Cron
     public function __construct(
         \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig,
         \Adyen\Payment\Logger\AdyenLogger $adyenLogger,
-        \Adyen\Payment\Model\Resource\Notification\CollectionFactory $notificationFactory,
+        \Adyen\Payment\Model\ResourceModel\Notification\CollectionFactory $notificationFactory,
         \Magento\Sales\Model\OrderFactory $orderFactory,
         \Adyen\Payment\Helper\Data $adyenHelper,
         OrderSender $orderSender,
         InvoiceSender $invoiceSender,
         \Magento\Framework\DB\TransactionFactory $transactionFactory,
         \Adyen\Payment\Model\Billing\AgreementFactory $billingAgreementFactory,
-        \Adyen\Payment\Model\Resource\Billing\Agreement\CollectionFactory $billingAgreementCollectionFactory,
+        \Adyen\Payment\Model\ResourceModel\Billing\Agreement\CollectionFactory $billingAgreementCollectionFactory,
         \Adyen\Payment\Model\Api\PaymentRequest $paymentRequest,
         \Adyen\Payment\Model\Order\PaymentFactory $adyenOrderPaymentFactory,
-        \Adyen\Payment\Model\Resource\Order\Payment\CollectionFactory $adyenOrderPaymentCollectionFactory,
+        \Adyen\Payment\Model\ResourceModel\Order\Payment\CollectionFactory $adyenOrderPaymentCollectionFactory,
         AreaList $areaList,
         TransactionRepositoryInterface $transactionRepository,
         SearchCriteriaBuilder $searchCriteriaBuilder,
@@ -260,6 +260,16 @@ class Cron
      * @return void
      */
     public function processNotification()
+    {
+        try {
+            $this->execute();
+        } catch (\Exception $e) {
+            $this->_adyenLogger->addAdyenNotificationCronjob($e->getMessage() . "\n" . $e->getTraceAsString());
+            throw $e;
+        }
+    }
+
+    public function execute()
     {
         // needed for Magento < 2.2.0 https://github.com/magento/magento2/pull/8413
         $renderer = Phrase::getRenderer();
@@ -554,11 +564,7 @@ class Cron
         }
 
         // if payment method is klarna, ratepay or openinvoice/afterpay show the reservartion number
-        if (($this->_paymentMethod == "klarna" || $this->_paymentMethod == "afterpay_default" ||
-                $this->_paymentMethod == "openinvoice" || $this->_paymentMethod == "ratepay"
-            ) && ($this->_klarnaReservationNumber != null &&
-                $this->_klarnaReservationNumber != "")
-        ) {
+        if ($this->_adyenHelper->isPaymentMethodOpenInvoiceMethod($this->_paymentMethod) && !empty($this->_klarnaReservationNumber)) {
             $klarnaReservationNumberText = "<br /> reservationNumber: " . $this->_klarnaReservationNumber;
         } else {
             $klarnaReservationNumberText = "";
@@ -1318,7 +1324,7 @@ class Cron
      */
     protected function _isAutoCapture()
     {
-        // validate if payment methods allowes manual capture
+        // validate if payment methods allows manual capture
         if ($this->_manualCaptureAllowed()) {
             $captureMode = trim($this->_getConfigData(
                 'capture_mode', 'adyen_abstract', $this->_order->getStoreId())
@@ -1330,7 +1336,7 @@ class Cron
             $captureModeOpenInvoice = $this->_getConfigData(
                 'auto_capture_openinvoice', 'adyen_abstract', $this->_order->getStoreId()
             );
-            $captureModePayPal = trim($this->_getConfigData(
+            $manualCapturePayPal = trim($this->_getConfigData(
                 'paypal_capture_mode', 'adyen_abstract', $this->_order->getStoreId())
             );
 
@@ -1367,18 +1373,19 @@ class Cron
                 );
                 return true;
             }
+
             // if PayPal capture modues is different from the default use this one
-            if (strcmp($this->_paymentMethod, 'paypal') === 0 && $captureModePayPal != "") {
-                if (strcmp($captureModePayPal, 'auto') === 0) {
-                    $this->_adyenLogger->addAdyenNotificationCronjob(
-                        'This payment method is paypal and configured to work as auto capture'
-                    );
-                    return true;
-                } elseif (strcmp($captureModePayPal, 'manual') === 0) {
+            if (strcmp($this->_paymentMethod, 'paypal') === 0) {
+                if ($manualCapturePayPal) {
                     $this->_adyenLogger->addAdyenNotificationCronjob(
                         'This payment method is paypal and configured to work as manual capture'
                     );
                     return false;
+                } else {
+                    $this->_adyenLogger->addAdyenNotificationCronjob(
+                        'This payment method is paypal and configured to work as auto capture'
+                    );
+                    return true;
                 }
             }
             if (strcmp($captureMode, 'manual') === 0) {
@@ -1417,6 +1424,11 @@ class Cron
         $manualCaptureAllowed = null;
         $paymentMethod = $this->_paymentMethod;
 
+        // For all openinvoice methods manual capture is the default
+        if ($this->_adyenHelper->isPaymentMethodOpenInvoiceMethod($paymentMethod)) {
+            return true;
+        }
+
         switch ($paymentMethod) {
             case 'cup':
             case 'cartebancaire':
@@ -1433,17 +1445,10 @@ class Cron
             case 'jcb':
             case 'laser':
             case 'paypal':
-            case 'klarna':
-            case 'afterpay_default':
-            case 'ratepay':
             case 'sepadirectdebit':
                 $manualCaptureAllowed = true;
                 break;
             default:
-                // To be sure check if it payment method starts with afterpay_ then manualCapture is allowed
-                if (strlen($this->_paymentMethod) >= 9 && substr($this->_paymentMethod, 0, 9) == "afterpay_") {
-                    $manualCaptureAllowed = true;
-                }
                 $manualCaptureAllowed = false;
         }
 
@@ -1742,4 +1747,6 @@ class Cron
         $path = 'payment/' . $paymentMethodCode . '/' . $field;
         return $this->_scopeConfig->getValue($path, \Magento\Store\Model\ScopeInterface::SCOPE_STORE, $storeId);
     }
+
+
 }

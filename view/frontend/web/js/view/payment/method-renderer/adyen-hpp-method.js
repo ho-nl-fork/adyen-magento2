@@ -19,14 +19,11 @@
  *
  * Author: Adyen <magento@adyen.com>
  */
-/*browser:true*/
-/*global define*/
 define(
     [
         'ko',
         'jquery',
         'Magento_Checkout/js/view/payment/default',
-        'Adyen_Payment/js/action/set-payment-method',
         'Magento_Checkout/js/action/select-payment-method',
         'Magento_Checkout/js/model/quote',
         'Magento_Checkout/js/checkout-data',
@@ -35,14 +32,17 @@ define(
         'Magento_Checkout/js/model/url-builder',
         'Adyen_Payment/js/model/adyen-payment-service',
         'Magento_Customer/js/model/customer',
-        'Magento_Checkout/js/model/full-screen-loader'
+        'Magento_Checkout/js/model/full-screen-loader',
+        'Magento_Checkout/js/action/place-order',
+        'uiLayout',
+        'Magento_Ui/js/model/messages'
     ],
-    function (ko, $, Component, setPaymentMethodAction, selectPaymentMethodAction, quote, checkoutData, additionalValidators, storage, urlBuilder, adyenPaymentService, customer, fullScreenLoader) {
+    function (ko, $, Component, selectPaymentMethodAction, quote, checkoutData, additionalValidators, storage, urlBuilder, adyenPaymentService, customer, fullScreenLoader, placeOrderAction, layout, Messages) {
         'use strict';
         var brandCode = ko.observable(null);
         var paymentMethod = ko.observable(null);
         var dfValue = ko.observable(null);
-
+        var messageComponents;
         return Component.extend({
             self: this,
             defaults: {
@@ -128,6 +128,27 @@ define(
                         document.body.appendChild(dfScriptTag);
                         waitForDfSet();
 
+                        // create component needs to be in initialize method
+                        var messageComponents = {};
+                        _.map(response, function (value) {
+
+                            var messageContainer = new Messages();
+                            var name = 'messages-' + value.brandCode;
+                            var messagesComponent = {
+                                parent: self.name,
+                                name: 'messages-' + value.brandCode,
+                                displayArea: 'messages-' + value.brandCode,
+                                component: 'Magento_Ui/js/view/messages',
+                                config: {
+                                    messageContainer: messageContainer
+                                }
+                            };
+                            layout([messagesComponent]);
+
+                            messageComponents[name] = messageContainer;
+                        });
+                        self.messageComponents = messageComponents;
+
                         fullScreenLoader.stopLoader();
                     }
                 ).fail(function (error) {
@@ -148,7 +169,16 @@ define(
                         return self.item.method;
                     };
                     result.validate = function () {
-                        return self.validate();
+                        return self.validate(value.brandCode);
+                    };
+                    result.placeRedirectOrder = function placeRedirectOrder(data) {
+                        return self.placeRedirectOrder(data);
+                    };
+                    result.isPlaceOrderActionAllowed = function(bool) {
+                        return self.isPlaceOrderActionAllowed(bool);
+                    };
+                    result.afterPlaceOrder = function() {
+                        return self.afterPlaceOrder();
                     };
                     result.isPaymentMethodOpenInvoiceMethod = function () {
                         return value.isPaymentMethodOpenInvoiceMethod;
@@ -212,10 +242,12 @@ define(
             },
             /** Redirect to adyen */
             continueToAdyen: function () {
+                var self = this;
+
                 if (this.validate() && additionalValidators.validate()) {
-                    //update payment method information if additional data was changed
-                    this.selectPaymentMethod();
-                    setPaymentMethodAction();
+                     var data = {};
+                    data.method = self.method;
+                    this.placeRedirectOrder(data);
                     return false;
                 }
             },
@@ -234,7 +266,8 @@ define(
 
                     if (brandCode() == "ideal") {
                         additionalData.issuer_id = this.issuerId();
-                    } else if (self.isPaymentMethodOpenInvoiceMethod()) {
+                    }
+                    else if (self.isPaymentMethodOpenInvoiceMethod()) {
                         additionalData.gender = this.gender();
                         additionalData.dob = this.dob();
                         additionalData.telephone = this.telephone();
@@ -245,9 +278,7 @@ define(
                     }
 
                     data.additional_data = additionalData;
-
-                    selectPaymentMethodAction(data);
-                    setPaymentMethodAction();
+                    this.placeRedirectOrder(data);
                 }
 
                 return false;
@@ -275,6 +306,32 @@ define(
 
                 return true;
             },
+            placeRedirectOrder: function(data) {
+                // Place Order but use our own redirect url after
+                var self = this;
+
+                var messageContainer = this.messageContainer;
+                if(brandCode()) {
+                    messageContainer = self.messageComponents['messages-' + brandCode()];
+                }
+                
+                this.isPlaceOrderActionAllowed(false);
+                fullScreenLoader.startLoader();
+                $.when(
+                    placeOrderAction(data, messageContainer)
+                ).fail(
+                    function () {
+                        self.isPlaceOrderActionAllowed(true);
+                    }
+                ).done(
+                    function () {
+                        self.afterPlaceOrder();
+                        $.mage.redirect(
+                            window.checkoutConfig.payment[quote.paymentMethod().method].redirectUrl
+                        );
+                    }
+                )
+            },
             isBrandCodeChecked: ko.computed(function () {
 
                 if (!quote.paymentMethod()) {
@@ -292,7 +349,14 @@ define(
             isIconEnabled: function () {
                 return window.checkoutConfig.payment.adyen.showLogo;
             },
-            validate: function () {
+            validate: function (brandCode) {
+                var form = '#payment_form_' + this.getCode() + '_' + brandCode;
+                var validate =  $(form).validation() && $(form).validation('isValid');
+
+                if(!validate) {
+                    return false;
+                }
+
                 return true;
             },
             getRatePayDeviceIdentToken: function () {
