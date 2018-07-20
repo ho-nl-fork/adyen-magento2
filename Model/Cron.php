@@ -357,7 +357,7 @@ class Cron
 
             $this->_order = $order;
 
-            if (!$this->_order->getId()) {
+            if (!$this->_order) {
 
                 // order does not exists remove from queue
                 $notification->delete();
