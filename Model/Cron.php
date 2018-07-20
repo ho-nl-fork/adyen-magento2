@@ -34,6 +34,7 @@ use Magento\Framework\App\Area;
 use Magento\Framework\App\AreaList;
 use Magento\Framework\Phrase\Renderer\Placeholder;
 use Magento\Framework\Phrase;
+use Magento\Sales\Model\OrderRepository;
 
 class Cron
 {
@@ -197,6 +198,11 @@ class Cron
     protected $_areaList;
 
     /**
+     * @var OrderRepository
+     */
+    private $orderRepository;
+
+    /**
      * Cron constructor.
      *
      * @param \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig
@@ -216,6 +222,7 @@ class Cron
      * @param TransactionRepositoryInterface $transactionRepository
      * @param SearchCriteriaBuilder $searchCriteriaBuilder
      * @param OrderPaymentRepositoryInterface $orderPaymentRepository
+     * @param OrderRepository $orderRepository
      */
     public function __construct(
         \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig,
@@ -234,7 +241,8 @@ class Cron
         AreaList $areaList,
         TransactionRepositoryInterface $transactionRepository,
         SearchCriteriaBuilder $searchCriteriaBuilder,
-        OrderPaymentRepositoryInterface $orderPaymentRepository
+        OrderPaymentRepositoryInterface $orderPaymentRepository,
+        OrderRepository $orderRepository
     ) {
         $this->_scopeConfig = $scopeConfig;
         $this->_adyenLogger = $adyenLogger;
@@ -253,6 +261,7 @@ class Cron
         $this->transactionRepository = $transactionRepository;
         $this->searchCriteriaBuilder = $searchCriteriaBuilder;
         $this->orderPaymentRepository = $orderPaymentRepository;
+        $this->orderRepository = $orderRepository;
     }
 
     /**
@@ -337,7 +346,17 @@ class Cron
             // get order
             $incrementId = $notification->getMerchantReference();
 
-            $this->_order = $this->_orderFactory->create()->loadByIncrementId($incrementId);
+            $searchCriteria = $this->searchCriteriaBuilder
+                ->addFilter('increment_id', $incrementId, 'eq')
+                ->create();
+
+            $orderList = $this->orderRepository->getList($searchCriteria)->getItems();
+
+            /** @var \Magento\Sales\Model\Order $order */
+            $order = reset($orderList);
+
+            $this->_order = $order;
+
             if (!$this->_order->getId()) {
 
                 // order does not exists remove from queue
