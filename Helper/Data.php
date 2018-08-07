@@ -1131,4 +1131,23 @@ class Data extends AbstractHelper
         }
         return $formFields;
     }
+
+    /**
+     * Get icon from variant
+     *
+     * @param $variant
+     * @return array
+     */
+    public function getVariantIcon($variant)
+    {
+        $asset = $this->createAsset(sprintf("Adyen_Payment::images/logos/%s_small.png", $variant));
+        list($width, $height) = getimagesize($asset->getSourceFile());
+        $icon = [
+            'url' => $asset->getUrl(),
+            'width' => $width,
+            'height' => $height
+        ];
+
+        return $icon;
+    }
 }
