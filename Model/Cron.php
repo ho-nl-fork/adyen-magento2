@@ -23,6 +23,7 @@
 
 namespace Adyen\Payment\Model;
 
+use Adyen\Payment\Model\Config\OrderConfigProviderFactoryInterface;
 use Magento\Framework\Webapi\Exception;
 use Magento\Sales\Model\Order\Email\Sender\OrderSender;
 use Magento\Sales\Model\Order\Email\Sender\InvoiceSender;
@@ -56,11 +57,9 @@ class Cron
     protected $_order;
 
     /**
-     * Core store config
-     *
-     * @var \Magento\Framework\App\Config\ScopeConfigInterface
+     * @var OrderConfigProviderFactoryInterface
      */
-    protected $_scopeConfig;
+    private $orderConfigProviderFactory;
 
     /**
      * @var \Adyen\Payment\Helper\Data
@@ -195,7 +194,7 @@ class Cron
     /**
      * Cron constructor.
      *
-     * @param \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig
+     * @param OrderConfigProviderFactoryInterface $orderConfigProviderFactory
      * @param \Adyen\Payment\Logger\AdyenLogger $adyenLogger
      * @param ResourceModel\Notification\CollectionFactory $notificationFactory
      * @param \Magento\Sales\Model\OrderFactory $orderFactory
@@ -213,7 +212,7 @@ class Cron
      * @param \Magento\Sales\Model\ResourceModel\Order\Status\CollectionFactory $orderStatusCollection
      */
     public function __construct(
-        \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig,
+        OrderConfigProviderFactoryInterface $orderConfigProviderFactory,
         \Adyen\Payment\Logger\AdyenLogger $adyenLogger,
         \Adyen\Payment\Model\ResourceModel\Notification\CollectionFactory $notificationFactory,
         \Magento\Sales\Model\OrderFactory $orderFactory,
@@ -229,9 +228,8 @@ class Cron
         \Adyen\Payment\Model\InvoiceFactory $adyenInvoiceFactory,
         AreaList $areaList,
         \Magento\Sales\Model\ResourceModel\Order\Status\CollectionFactory $orderStatusCollection
-    )
-    {
-        $this->_scopeConfig = $scopeConfig;
+    ) {
+        $this->orderConfigProviderFactory = $orderConfigProviderFactory;
         $this->_adyenLogger = $adyenLogger;
         $this->_notificationFactory = $notificationFactory;
         $this->_orderFactory = $orderFactory;
@@ -582,7 +580,7 @@ class Cron
         // If notification is pending status and pending status is set add the status change to the comment history
         if ($this->_eventCode == Notification::PENDING) {
             $pendingStatus = $this->_getConfigData(
-                'pending_status', 'adyen_abstract', $this->_order->getStoreId()
+                'pending_status', 'adyen_abstract', $this->_order
             );
             if ($pendingStatus != "") {
                 $this->_order->addStatusHistoryComment($comment, $pendingStatus);
@@ -732,7 +730,7 @@ class Cron
     protected function _holdCancelOrder($ignoreHasInvoice)
     {
         $orderStatus = $this->_getConfigData(
-            'payment_cancelled', 'adyen_abstract', $this->_order->getStoreId()
+            'payment_cancelled', 'adyen_abstract', $this->_order
         );
 
         // check if order has in invoice only cancel/hold if this is not the case
@@ -780,7 +778,7 @@ class Cron
                 break;
             case Notification::REFUND:
                 $ignoreRefundNotification = $this->_getConfigData(
-                    'ignore_refund_notification', 'adyen_abstract', $this->_order->getStoreId()
+                    'ignore_refund_notification', 'adyen_abstract', $this->_order
                 );
                 if ($ignoreRefundNotification != true) {
                     $this->_refundOrder();
@@ -794,7 +792,7 @@ class Cron
                 break;
             case Notification::PENDING:
                 if ($this->_getConfigData(
-                    'send_email_bank_sepa_on_pending', 'adyen_abstract', $this->_order->getStoreId())
+                    'send_email_bank_sepa_on_pending', 'adyen_abstract', $this->_order)
                 ) {
                     // Check if payment is banktransfer or sepa if true then send out order confirmation email
                     $isBankTransfer = $this->_isBankTransfer();
@@ -1114,8 +1112,8 @@ class Cron
         }
 
         if (($this->_paymentMethod == "c_cash" &&
-                $this->_getConfigData('create_shipment', 'adyen_cash', $this->_order->getStoreId())) ||
-            ($this->_getConfigData('create_shipment', 'adyen_pos', $this->_order->getStoreId()) &&
+                $this->_getConfigData('create_shipment', 'adyen_cash', $this->_order)) ||
+            ($this->_getConfigData('create_shipment', 'adyen_pos', $this->_order) &&
                 $_paymentCode == "adyen_pos")
         ) {
 
@@ -1149,7 +1147,7 @@ class Cron
     private function _setPrePaymentAuthorized()
     {
         $status = $this->_getConfigData(
-            'payment_pre_authorized', 'adyen_abstract', $this->_order->getStoreId()
+            'payment_pre_authorized', 'adyen_abstract', $this->_order
         );
 
         // only do this if status in configuration is set
@@ -1204,7 +1202,7 @@ class Cron
             }
 
             $createPendingInvoice = (bool)$this->_getConfigData(
-                'create_pending_invoice', 'adyen_abstract', $this->_order->getStoreId()
+                'create_pending_invoice', 'adyen_abstract', $this->_order
             );
 
             if (!$createPendingInvoice) {
@@ -1250,17 +1248,17 @@ class Cron
         // validate if payment methods allows manual capture
         if ($this->_manualCaptureAllowed()) {
             $captureMode = trim($this->_getConfigData(
-                'capture_mode', 'adyen_abstract', $this->_order->getStoreId())
+                'capture_mode', 'adyen_abstract', $this->_order)
             );
             $sepaFlow = trim($this->_getConfigData(
-                'sepa_flow', 'adyen_abstract', $this->_order->getStoreId())
+                'sepa_flow', 'adyen_abstract', $this->_order)
             );
             $_paymentCode = $this->_paymentMethodCode();
             $captureModeOpenInvoice = $this->_getConfigData(
-                'auto_capture_openinvoice', 'adyen_abstract', $this->_order->getStoreId()
+                'auto_capture_openinvoice', 'adyen_abstract', $this->_order
             );
             $manualCapturePayPal = trim($this->_getConfigData(
-                'paypal_capture_mode', 'adyen_abstract', $this->_order->getStoreId())
+                'paypal_capture_mode', 'adyen_abstract', $this->_order)
             );
 
             /*
@@ -1396,7 +1394,7 @@ class Cron
     protected function _getFraudManualReviewStatus()
     {
         return $this->_getConfigData(
-            'fraud_manual_review_status', 'adyen_abstract', $this->_order->getStoreId()
+            'fraud_manual_review_status', 'adyen_abstract', $this->_order
         );
     }
 
@@ -1406,7 +1404,7 @@ class Cron
     protected function _getFraudManualReviewAcceptStatus()
     {
         return $this->_getConfigData(
-            'fraud_manual_review_accept_status', 'adyen_abstract', $this->_order->getStoreId()
+            'fraud_manual_review_accept_status', 'adyen_abstract', $this->_order
         );
     }
 
@@ -1477,7 +1475,7 @@ class Cron
 
                 $autoCapture = $this->_isAutoCapture();
                 $createPendingInvoice = (bool)$this->_getConfigData(
-                    'create_pending_invoice', 'adyen_abstract', $this->_order->getStoreId()
+                    'create_pending_invoice', 'adyen_abstract', $this->_order
                 );
 
                 if ((!$autoCapture) && ($createPendingInvoice)) {
@@ -1519,7 +1517,7 @@ class Cron
 
             $this->_setPaymentAuthorized();
 
-            $invoiceAutoMail = (bool)$this->_scopeConfig->isSetFlag(
+            $invoiceAutoMail = (bool) $this->orderConfigProviderFactory->get($this->_order)->isSetFlag(
                 \Magento\Sales\Model\Order\Email\Container\InvoiceIdentity::XML_PATH_EMAIL_ENABLED,
                 \Magento\Store\Model\ScopeInterface::SCOPE_STORE,
                 $this->_order->getStoreId()
@@ -1556,14 +1554,14 @@ class Cron
         }
 
         $status = $this->_getConfigData(
-            'payment_authorized', 'adyen_abstract', $this->_order->getStoreId()
+            'payment_authorized', 'adyen_abstract', $this->_order
         );
 
         // virtual order can have different status
         if ($this->_order->getIsVirtual()) {
             $this->_adyenLogger->addAdyenNotificationCronjob('Product is a virtual product');
             $virtualStatus = $this->_getConfigData(
-                'payment_authorized_virtual', 'adyen_abstract', $this->_order->getStoreId()
+                'payment_authorized_virtual', 'adyen_abstract', $this->_order
             );
             if ($virtualStatus != "") {
                 $status = $virtualStatus;
@@ -1589,13 +1587,13 @@ class Cron
 
                 if ($paidAmount > $orginalAmount) {
                     $overpaidStatus = $this->_getConfigData(
-                        'order_overpaid_status', 'adyen_boleto', $this->_order->getStoreId()
+                        'order_overpaid_status', 'adyen_boleto', $this->_order
                     );
                     // check if there is selected a status if not fall back to the default
                     $status = (!empty($overpaidStatus)) ? $overpaidStatus : $status;
                 } else {
                     $underpaidStatus = $this->_getConfigData(
-                        'order_underpaid_status', 'adyen_boleto', $this->_order->getStoreId()
+                        'order_underpaid_status', 'adyen_boleto', $this->_order
                     );
                     // check if there is selected a status if not fall back to the default
                     $status = (!empty($underpaidStatus)) ? $underpaidStatus : $status;
@@ -1676,14 +1674,12 @@ class Cron
      *
      * @param $field
      * @param string $paymentMethodCode
-     * @param $storeId
+     * @param \Magento\Sales\Model\Order $order
      * @return mixed
      */
-    protected function _getConfigData($field, $paymentMethodCode = 'adyen_cc', $storeId)
+    protected function _getConfigData($field, $paymentMethodCode = 'adyen_cc', $order)
     {
         $path = 'payment/' . $paymentMethodCode . '/' . $field;
-        return $this->_scopeConfig->getValue($path, \Magento\Store\Model\ScopeInterface::SCOPE_STORE, $storeId);
+        return $this->orderConfigProviderFactory->get($order)->getValue($path, \Magento\Store\Model\ScopeInterface::SCOPE_STORE, $order->getStoreId());
     }
-
-
 }
