@@ -1577,6 +1577,9 @@ class Cron
                     $invoice->pay();
                     $invoice->save();
 
+                    $this->orderRepository->save($invoice->getOrder());
+                    $this->_order = $invoice->getOrder();
+
                     $this->_adyenLogger->addAdyenNotificationCronjob('Paid pending invoice');
 
                     /*
