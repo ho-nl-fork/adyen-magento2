@@ -31,6 +31,7 @@ use Magento\Framework\App\Area;
 use Magento\Framework\App\AreaList;
 use Magento\Framework\Phrase\Renderer\Placeholder;
 use Magento\Framework\Phrase;
+use Magento\Sales\Model\Order\InvoiceRepository;
 use Magento\Sales\Model\OrderRepository;
 
 class Cron
@@ -205,6 +206,11 @@ class Cron
     private $orderRepository;
 
     /**
+     * @var InvoiceRepository
+     */
+    private $invoiceRepository;
+
+    /**
      * Cron constructor.
      *
      * @param \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig
@@ -225,6 +231,7 @@ class Cron
      * @param \Magento\Sales\Model\ResourceModel\Order\Status\CollectionFactory $orderStatusCollection
      * @param SearchCriteriaBuilder $searchCriteriaBuilder
      * @param OrderRepository $orderRepository
+     * @param InvoiceRepository $invoiceRepository
      */
     public function __construct(
         \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig,
@@ -244,7 +251,8 @@ class Cron
         AreaList $areaList,
         \Magento\Sales\Model\ResourceModel\Order\Status\CollectionFactory $orderStatusCollection,
         SearchCriteriaBuilder $searchCriteriaBuilder,
-        OrderRepository $orderRepository
+        OrderRepository $orderRepository,
+        InvoiceRepository $invoiceRepository
     )
     {
         $this->_scopeConfig = $scopeConfig;
@@ -265,6 +273,7 @@ class Cron
         $this->_orderStatusCollection = $orderStatusCollection;
         $this->searchCriteriaBuilder = $searchCriteriaBuilder;
         $this->orderRepository = $orderRepository;
+        $this->invoiceRepository = $invoiceRepository;
     }
 
     /**
@@ -1547,8 +1556,66 @@ class Cron
             if ($invoiceAutoMail) {
                 $this->_invoiceSender->send($invoice);
             }
-        } else {
-            $this->_adyenLogger->addAdyenNotificationCronjob('It is not possible to create invoice for this order');
+        }
+        else {
+            $searchCriteria = $this->searchCriteriaBuilder
+                ->addFilter('order_id', $this->_order->getId(), 'eq')
+                ->create();
+
+            $invoices = $this->invoiceRepository->getList($searchCriteria);
+
+            $paidInvoice = false;
+            foreach ($invoices as $invoice) {
+                /** @var \Magento\Sales\Model\Order\Invoice $invoice */
+                if ($invoice->getState() != \Magento\Sales\Model\Order\Invoice::STATE_OPEN
+                    && (int) $invoice->getGrandTotal() * 100 != $this->_value
+                ) {
+                    continue;
+                }
+
+                try {
+                    $invoice->pay();
+                    $invoice->save();
+
+                    $this->_adyenLogger->addAdyenNotificationCronjob('Paid pending invoice');
+
+                    /*
+                     * Add invoice in the adyen_invoice table
+                     */
+                    $this->_adyenInvoiceFactory->create()
+                        ->setInvoiceId($invoice->getEntityId())
+                        ->setPspreference($this->_pspReference)
+                        ->setOriginalReference($this->_pspReference)
+                        ->setAcquirerReference($this->_acquirerReference)
+                        ->save();
+
+                    $this->_adyenLogger->addAdyenNotificationCronjob('Created invoice entry in the Adyen table');
+                } catch (Exception $e) {
+                    $this->_adyenLogger->addAdyenNotificationCronjob(
+                        'Error saving pending invoice. The error message is: ' . $e->getMessage()
+                    );
+                    throw new Exception(__('Error saving invoice. The error message is: %1', $e->getMessage()));
+                }
+
+                $this->_setPaymentAuthorized();
+
+                $invoiceAutoMail = (bool)$this->_scopeConfig->isSetFlag(
+                    \Magento\Sales\Model\Order\Email\Container\InvoiceIdentity::XML_PATH_EMAIL_ENABLED,
+                    \Magento\Store\Model\ScopeInterface::SCOPE_STORE,
+                    $this->_order->getStoreId()
+                );
+
+                if ($invoiceAutoMail) {
+                    $this->_invoiceSender->send($invoice);
+                }
+
+                $paidInvoice = true;
+                break;
+            }
+
+            if (!$paidInvoice) {
+                $this->_adyenLogger->addAdyenNotificationCronjob('It is not possible to create invoice for this order');
+            }
         }
     }
 
