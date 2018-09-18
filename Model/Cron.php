@@ -1577,8 +1577,10 @@ class Cron
                     $invoice->pay();
                     $invoice->save();
 
-                    $this->orderRepository->save($invoice->getOrder());
-                    $this->_order = $invoice->getOrder();
+                    $this->_order->setBaseTotalPaid($invoice->getOrder()->getBaseTotalPaid());
+                    $this->_order->setTotalPaid($invoice->getOrder()->getTotalPaid());
+                    $this->_order->setBaseTotalDue($invoice->getOrder()->getBaseTotalDue());
+                    $this->_order->setTotalDue($invoice->getOrder()->getTotalDue());
 
                     $this->_adyenLogger->addAdyenNotificationCronjob('Paid pending invoice');
 
