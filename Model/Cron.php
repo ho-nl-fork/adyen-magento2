@@ -1582,6 +1582,10 @@ class Cron
                     $this->_order->setBaseTotalDue($invoice->getOrder()->getBaseTotalDue());
                     $this->_order->setTotalDue($invoice->getOrder()->getTotalDue());
 
+                    $paymentObj = $this->_order->getPayment();
+                    $paymentObj->setBaseAmountPaid($invoice->getOrder()->getBaseTotalPaid());
+                    $paymentObj->setAmountPaid($invoice->getOrder()->getTotalPaid());
+
                     $this->_adyenLogger->addAdyenNotificationCronjob('Paid pending invoice');
 
                     /*
