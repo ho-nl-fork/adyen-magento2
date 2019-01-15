@@ -23,6 +23,8 @@
 
 namespace Adyen\Payment\Helper;
 
+use Adyen\Payment\Model\Config\OrderConfigProviderFactoryInterface;
+use Adyen\Payment\Model\Config\QuoteConfigProviderFactoryInterface;
 use Magento\Framework\App\Helper\AbstractHelper;
 
 /**
@@ -84,6 +86,18 @@ class Data extends AbstractHelper
      */
     protected $_taxCalculation;
 
+    /** @var QuoteConfigProviderFactoryInterface */
+    protected $quoteConfigProviderFactory;
+
+    /** @var OrderConfigProviderFactoryInterface */
+    private $orderConfigProviderFactory;
+
+    /** @var \Magento\Quote\Model\Quote|null */
+    protected $quote = null;
+
+    /** @var \Magento\Sales\Model\Order|null */
+    protected $order = null;
+
     /**
      * Data constructor.
      *
@@ -107,7 +121,9 @@ class Data extends AbstractHelper
         \Magento\Framework\View\Asset\Source $assetSource,
         \Adyen\Payment\Model\ResourceModel\Notification\CollectionFactory $notificationFactory,
         \Magento\Tax\Model\Config $taxConfig,
-        \Magento\Tax\Model\Calculation $taxCalculation
+        \Magento\Tax\Model\Calculation $taxCalculation,
+        QuoteConfigProviderFactoryInterface $quoteConfigProviderFactory,
+        OrderConfigProviderFactoryInterface $orderConfigProviderFactory
     ) {
         parent::__construct($context);
         $this->_encryptor = $encryptor;
@@ -120,6 +136,8 @@ class Data extends AbstractHelper
         $this->_notificationFactory = $notificationFactory;
         $this->_taxConfig = $taxConfig;
         $this->_taxCalculation = $taxCalculation;
+        $this->quoteConfigProviderFactory = $quoteConfigProviderFactory;
+        $this->orderConfigProviderFactory = $orderConfigProviderFactory;
     }
 
     /**
@@ -663,13 +681,62 @@ class Data extends AbstractHelper
     {
         $path = 'payment/' . $paymentMethodCode . '/' . $field;
 
+        $quote = $this->getQuote();
+        $order = $this->getOrder();
         if (!$flag) {
+            if ($quote) {
+                return $this->quoteConfigProviderFactory->get($quote)->getValue($path, \Magento\Store\Model\ScopeInterface::SCOPE_STORE, $quote->getStoreId());
+            }
+            elseif ($order) {
+                return $this->orderConfigProviderFactory->get($order)->getValue($path, \Magento\Store\Model\ScopeInterface::SCOPE_STORE, $order->getStoreId());
+            }
             return $this->scopeConfig->getValue($path, \Magento\Store\Model\ScopeInterface::SCOPE_STORE, $storeId);
         } else {
+            if ($quote) {
+                return $this->quoteConfigProviderFactory->get($quote)->isSetFlag($path, \Magento\Store\Model\ScopeInterface::SCOPE_STORE, $quote->getStoreId());
+            }
+            elseif ($order) {
+                return $this->orderConfigProviderFactory->get($order)->isSetFlag($path, \Magento\Store\Model\ScopeInterface::SCOPE_STORE, $order->getStoreId());
+            }
             return $this->scopeConfig->isSetFlag($path, \Magento\Store\Model\ScopeInterface::SCOPE_STORE, $storeId);
         }
     }
 
+    /**
+     * @param \Magento\Quote\Model\Quote $quote
+     * @return $this
+     */
+    public function setQuote($quote)
+    {
+        $this->quote = $quote;
+        return $this;
+    }
+
+    /**
+     * @return \Magento\Quote\Model\Quote|null
+     */
+    public function getQuote()
+    {
+        return $this->quote;
+    }
+
+    /**
+     * @param \Magento\Sales\Model\Order $order
+     * @return $this
+     */
+    public function setOrder($order)
+    {
+        $this->order = $order;
+        return $this;
+    }
+
+    /**
+     * @return \Magento\Sales\Model\Order|null
+     */
+    public function getOrder()
+    {
+        return $this->order;
+    }
 
     /**
      * @return array
