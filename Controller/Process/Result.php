@@ -81,6 +81,8 @@ class Result extends \Magento\Framework\App\Action\Action
         $this->_session = $session;
         $this->_adyenLogger = $adyenLogger;
         parent::__construct($context);
+
+        $this->_adyenHelper->setQuote($session->getQuote());
     }
 
     /**

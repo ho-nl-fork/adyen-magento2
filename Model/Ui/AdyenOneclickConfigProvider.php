@@ -99,6 +99,8 @@ class AdyenOneclickConfigProvider implements ConfigProviderInterface
         $this->_storeManager = $storeManager;
         $this->_urlBuilder = $urlBuilder;
         $this->ccConfig = $ccConfig;
+
+        $this->_adyenHelper->setQuote($session->getQuote());
     }
 
     /**

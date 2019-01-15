@@ -51,17 +51,28 @@ class TokenUiComponentProvider implements TokenUiComponentProviderInterface
     private $adyenHelper;
 
     /**
+     * @var \Magento\Checkout\Model\Session
+     */
+    private $checkoutSession;
+
+    /**
      * @param TokenUiComponentInterfaceFactory $componentFactory
      * @param UrlInterface $urlBuilder
+     * @param Data $adyenHelper
+     * @param \Magento\Checkout\Model\Session $checkoutSession
      */
     public function __construct(
         TokenUiComponentInterfaceFactory $componentFactory,
         UrlInterface $urlBuilder,
-        Data $adyenHelper
+        Data $adyenHelper,
+        \Magento\Checkout\Model\Session $checkoutSession
     ) {
         $this->componentFactory = $componentFactory;
         $this->urlBuilder = $urlBuilder;
         $this->adyenHelper = $adyenHelper;
+        $this->checkoutSession = $checkoutSession;
+
+        $this->adyenHelper->setQuote($checkoutSession->getQuote());
     }
 
     /**

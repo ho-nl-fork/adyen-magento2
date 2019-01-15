@@ -88,6 +88,8 @@ class Pos extends \Magento\Payment\Block\Form
             $incrementId = $this->_getCheckout()->getLastRealOrderId();
             $this->_order = $this->_orderFactory->create()->loadByIncrementId($incrementId);
         }
+
+        $this->_adyenHelper->setOrder($this->_order);
     }
 
     /**

@@ -55,6 +55,9 @@ class BeforeShipmentObserver extends AbstractDataAssignObserver
     {
         $shipment = $observer->getEvent()->getShipment();
         $order = $shipment->getOrder();
+
+        $this->_adyenHelper->setOrder($order);
+
         $captureOnShipment = $this->_adyenHelper->getConfigData('capture_on_shipment', 'adyen_abstract', $order->getStoreId());
 
         if ($this->isPaymentMethodAdyen($order) && $captureOnShipment) {

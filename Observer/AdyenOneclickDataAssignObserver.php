@@ -55,16 +55,26 @@ class AdyenOneclickDataAssignObserver extends AbstractDataAssignObserver
     private $appState;
 
     /**
+     * @var \Magento\Checkout\Model\Session
+     */
+    private $checkoutSession;
+
+    /**
      * AdyenCcDataAssignObserver constructor.
      * @param \Adyen\Payment\Helper\Data $adyenHelper
+     * @param \Magento\Framework\Model\Context $context
+     * @param \Magento\Checkout\Model\Session $checkoutSession
      */
     public function __construct(
         \Adyen\Payment\Helper\Data $adyenHelper,
-        \Magento\Framework\Model\Context $context
+        \Magento\Framework\Model\Context $context,
+        \Magento\Checkout\Model\Session $checkoutSession
     ) {
         $this->adyenHelper = $adyenHelper;
         $this->appState = $context->getAppState();
+        $this->checkoutSession = $checkoutSession;
 
+        $this->adyenHelper->setQuote($checkoutSession->getQuote());
     }
 
     /**

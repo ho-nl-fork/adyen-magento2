@@ -62,6 +62,8 @@ class InstallmentValidator extends AbstractValidator
         $this->adyenHelper = $adyenHelper;
         $this->session = $session;
         parent::__construct($resultFactory);
+
+        $this->adyenHelper->setQuote($this->session->getQuote());
     }
 
 

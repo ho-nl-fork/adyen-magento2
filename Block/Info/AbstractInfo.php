@@ -56,6 +56,8 @@ class AbstractInfo extends \Magento\Payment\Block\Info
         parent::__construct($context, $data);
         $this->_adyenHelper = $adyenHelper;
         $this->_adyenOrderPaymentCollectionFactory = $adyenOrderPaymentCollectionFactory;
+
+        $this->_adyenHelper->setOrder($this->getInfo()->getOrder());
     }
 
     /**

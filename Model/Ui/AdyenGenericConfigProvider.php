@@ -34,12 +34,24 @@ class AdyenGenericConfigProvider implements ConfigProviderInterface
     protected $_adyenHelper;
 
     /**
+     * @var \Magento\Checkout\Model\Session
+     */
+    private $checkoutSession;
+
+    /**
      * AdyenGenericConfigProvider constructor.
      *
      * @param \Adyen\Payment\Helper\Data $adyenHelper
+     * @param \Magento\Checkout\Model\Session $checkoutSession
      */
-    public function __construct(\Adyen\Payment\Helper\Data $adyenHelper) {
+    public function __construct(
+        \Adyen\Payment\Helper\Data $adyenHelper,
+        \Magento\Checkout\Model\Session $checkoutSession
+    ) {
         $this->_adyenHelper = $adyenHelper;
+        $this->checkoutSession = $checkoutSession;
+
+        $this->_adyenHelper->setQuote($checkoutSession->getQuote());
     }
     /**
      * Define foreach payment methods the RedirectUrl

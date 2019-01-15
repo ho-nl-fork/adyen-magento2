@@ -272,7 +272,7 @@ class ResultPos extends \Magento\Framework\App\Action\Action
         $order = $this->_order;
 
         if ($order) {
-            $this->_adyenHelper->cancelOrder($order);
+            $this->_adyenHelper->setOrder($order)->cancelOrder($order);
 
             if (isset($response['authResult']) &&
                 $response['authResult'] == \Adyen\Payment\Model\Notification::CANCELLED) {

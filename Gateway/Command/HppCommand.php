@@ -75,7 +75,7 @@ class HppCommand implements CommandInterface
 
         // update status and state
         $stateObject->setState(\Magento\Sales\Model\Order::STATE_NEW);
-        $stateObject->setStatus($this->_adyenHelper->getAdyenAbstractConfigData('order_status'));
+        $stateObject->setStatus($this->_adyenHelper->setOrder($order)->getAdyenAbstractConfigData('order_status'));
         $stateObject->setIsNotified(false);
         
         return $this;

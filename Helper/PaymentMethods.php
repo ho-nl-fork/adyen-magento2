@@ -141,6 +141,9 @@ class PaymentMethods extends AbstractHelper
     {
         // get quote from quoteId
         $quote = $this->_quoteRepository->getActive($quoteId);
+
+        $this->_adyenHelper->setQuote($quote);
+
         $store = $quote->getStore();
         $paymentMethods = $this->_addHppMethodsToConfig($store, $country);
         return $paymentMethods;
