@@ -32,20 +32,30 @@ class ApplePay extends \Magento\Payment\Block\Form
     protected $_adyenHelper;
 
     /**
+     * @var \Magento\Backend\Model\Session\Quote
+     */
+    private $sessionQuote;
+
+    /**
      * ApplePay constructor.
      *
      * @param \Magento\Framework\View\Element\Template\Context $context
      * @param \Adyen\Payment\Helper\Data $adyenHelper
+     * @param \Magento\Backend\Model\Session\Quote $sessionQuote
      * @param array $data
      */
     public function __construct(
         \Magento\Framework\View\Element\Template\Context $context,
         \Adyen\Payment\Helper\Data $adyenHelper,
+        \Magento\Backend\Model\Session\Quote $sessionQuote,
         array $data = []
     )
     {
         parent::__construct($context, $data);
         $this->_adyenHelper = $adyenHelper;
+        $this->sessionQuote = $sessionQuote;
+
+        $this->_adyenHelper->setQuote($sessionQuote->getQuote());
     }
 
     /**

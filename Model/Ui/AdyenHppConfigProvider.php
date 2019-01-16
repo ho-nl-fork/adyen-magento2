@@ -89,6 +89,8 @@ class AdyenHppConfigProvider implements ConfigProviderInterface
         $this->_urlBuilder = $urlBuilder;
         $this->_customerSession = $customerSession;
         $this->_session = $session;
+
+        $this->_adyenHelper->setQuote($session->getQuote());
     }
 
     /**

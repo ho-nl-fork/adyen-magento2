@@ -205,7 +205,7 @@ class Validate3d extends \Magento\Framework\App\Action\Action
 
                         // Move the order from PAYMENT_REVIEW to NEW, so that can be cancelled
                         $order->setState(\Magento\Sales\Model\Order::STATE_NEW);
-                        $this->_adyenHelper->cancelOrder($order);
+                        $this->_adyenHelper->setOrder($order)->cancelOrder($order);
                         $this->messageManager->addErrorMessage("3D-secure validation was unsuccessful");
                         
                         // reactivate the quote
@@ -214,7 +214,7 @@ class Validate3d extends \Magento\Framework\App\Action\Action
                         // restore the quote
                         $session->restoreQuote();
 
-                        $this->_redirect($this->_adyenHelper->getAdyenAbstractConfigData('return_path'));
+                        $this->_redirect($this->_adyenHelper->setOrder($order)->getAdyenAbstractConfigData('return_path'));
                     }
                 }
             } else {

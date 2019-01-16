@@ -141,6 +141,9 @@ class PaymentMethods extends AbstractHelper
     {
         // get quote from quoteId
         $quote = $this->_quoteRepository->getActive($quoteId);
+
+        $this->_adyenHelper->setQuote($quote);
+
         $store = $quote->getStore();
         $paymentMethods = $this->_addHppMethodsToConfig($store, $country);
         return $paymentMethods;
@@ -154,17 +157,11 @@ class PaymentMethods extends AbstractHelper
     {
         $paymentMethods = [];
 
-        $ccEnabled = $this->_config->getValue(
-            'payment/' . \Adyen\Payment\Model\Ui\AdyenCcConfigProvider::CODE . '/active',
-            \Magento\Store\Model\ScopeInterface::SCOPE_STORES,
-            $store->getCode()
-        );
+        $ccEnabled = $this->_adyenHelper->getAdyenCcConfigData('active', $store->getId());
+
         $ccTypes = array_keys($this->_adyenHelper->getCcTypesAltData());
-        $sepaEnabled = $this->_config->getValue(
-            'payment/' . \Adyen\Payment\Model\Ui\AdyenSepaConfigProvider::CODE . '/active',
-            \Magento\Store\Model\ScopeInterface::SCOPE_STORES,
-            $store->getCode()
-        );
+
+        $sepaEnabled = $this->_adyenHelper->getConfigData('active', \Adyen\Payment\Model\Ui\AdyenSepaConfigProvider::CODE, $store->getId());
 
         foreach ($this->_fetchHppMethods($store, $country) as $methodCode => $methodData) {
             /*

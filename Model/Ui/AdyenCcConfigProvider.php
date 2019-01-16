@@ -67,6 +67,10 @@ class AdyenCcConfigProvider implements ConfigProviderInterface
      */
     private $ccConfig;
 
+    /**
+     * @var \Magento\Checkout\Model\Session
+     */
+    private $checkoutSession;
 
     /**
      * AdyenCcConfigProvider constructor.
@@ -77,7 +81,8 @@ class AdyenCcConfigProvider implements ConfigProviderInterface
      * @param \Magento\Framework\UrlInterface $urlBuilder
      * @param Source $assetSource
      * @param \Magento\Payment\Model\CcConfig $ccConfig
-     * @param Config $config
+     * @param \Magento\Checkout\Model\Session $checkoutSession
+     * @internal param Config $config
      */
     public function __construct(
         PaymentHelper $paymentHelper,
@@ -85,15 +90,18 @@ class AdyenCcConfigProvider implements ConfigProviderInterface
         \Magento\Framework\App\RequestInterface $request,
         \Magento\Framework\UrlInterface $urlBuilder,
         Source $assetSource,
-        \Magento\Payment\Model\CcConfig $ccConfig
-    )
-    {
+        \Magento\Payment\Model\CcConfig $ccConfig,
+        \Magento\Checkout\Model\Session $checkoutSession
+    ) {
         $this->_paymentHelper = $paymentHelper;
         $this->_adyenHelper = $adyenHelper;
         $this->_request = $request;
         $this->_urlBuilder = $urlBuilder;
         $this->_assetSource = $assetSource;
         $this->ccConfig = $ccConfig;
+        $this->checkoutSession = $checkoutSession;
+
+        $this->_adyenHelper->setQuote($checkoutSession->getQuote());
     }
 
     /**

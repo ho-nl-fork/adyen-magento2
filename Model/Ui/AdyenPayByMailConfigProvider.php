@@ -64,12 +64,15 @@ class AdyenPayByMailConfigProvider implements ConfigProviderInterface
         PaymentHelper $paymentHelper,
         \Adyen\Payment\Helper\Data $adyenHelper,
         \Magento\Framework\App\RequestInterface $request,
-        \Magento\Framework\UrlInterface $urlBuilder
+        \Magento\Framework\UrlInterface $urlBuilder,
+        \Magento\Checkout\Model\Session $checkoutSession
     ) {
         $this->_paymentHelper = $paymentHelper;
         $this->_adyenHelper = $adyenHelper;
         $this->_request = $request;
         $this->_urlBuilder = $urlBuilder;
+
+        $this->_adyenHelper->setQuote($checkoutSession->getQuote());
     }
 
     /**

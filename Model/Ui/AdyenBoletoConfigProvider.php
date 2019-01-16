@@ -53,23 +53,33 @@ class AdyenBoletoConfigProvider implements ConfigProviderInterface
     protected $_request;
 
     /**
+     * @var \Magento\Checkout\Model\Session
+     */
+    private $checkoutSession;
+
+    /**
      * AdyenBoletoConfigProvider constructor.
      *
      * @param \Magento\Payment\Helper\Data $paymentHelper
      * @param \Adyen\Payment\Helper\Data $adyenHelper
      * @param \Magento\Framework\UrlInterface $urlBuilder
      * @param \Magento\Framework\App\RequestInterface $request
+     * @param \Magento\Checkout\Model\Session $checkoutSession
      */
     public function __construct(
         \Magento\Payment\Helper\Data $paymentHelper,
         \Adyen\Payment\Helper\Data $adyenHelper,
         \Magento\Framework\UrlInterface $urlBuilder,
-        \Magento\Framework\App\RequestInterface $request
+        \Magento\Framework\App\RequestInterface $request,
+        \Magento\Checkout\Model\Session $checkoutSession
     ) {
         $this->_paymentHelper = $paymentHelper;
         $this->_adyenHelper = $adyenHelper;
         $this->_urlBuilder = $urlBuilder;
         $this->_request = $request;
+        $this->checkoutSession = $checkoutSession;
+
+        $this->_adyenHelper->setQuote($checkoutSession->getQuote());
     }
 
     /**

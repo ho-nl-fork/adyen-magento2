@@ -100,6 +100,8 @@ class Redirect extends \Magento\Payment\Block\Form
         }
         $this->_taxConfig = $taxConfig;
         $this->_taxCalculation = $taxCalculation;
+
+        $this->_adyenHelper->setOrder($this->_order);
     }
 
 

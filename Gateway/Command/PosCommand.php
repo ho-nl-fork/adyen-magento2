@@ -56,6 +56,8 @@ class PosCommand implements CommandInterface
         $payment = $payment->getPayment();
         $payment->getOrder()->setCanSendNewEmailFlag(false);
 
+        $this->_adyenHelper->setOrder($payment->getOrder());
+
         // update status and state
         $stateObject->setState(\Magento\Sales\Model\Order::STATE_NEW);
         $stateObject->setStatus($this->_adyenHelper->getAdyenAbstractConfigData('order_status'));

@@ -65,6 +65,8 @@ class PayByMailCommand implements CommandInterface
         $payment =\Magento\Payment\Gateway\Helper\SubjectReader::readPayment($commandSubject);
         $payment = $payment->getPayment();
 
+        $this->_adyenHelper->setOrder($payment->getOrder());
+
         // do not let magento set status to processing
         $payment->setIsTransactionPending(true);
 
@@ -86,6 +88,8 @@ class PayByMailCommand implements CommandInterface
      */
     public function generatePaymentUrl($payment, $paymentAmount = false)
     {
+        $this->_adyenHelper->setOrder($payment->getOrder());
+
         $url = $this->getFormUrl();
         $fields = $this->getFormFields($payment, $paymentAmount);
 

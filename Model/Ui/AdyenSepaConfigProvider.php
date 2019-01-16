@@ -54,23 +54,33 @@ class AdyenSepaConfigProvider implements ConfigProviderInterface
     protected $_urlBuilder;
 
     /**
+     * @var \Magento\Checkout\Model\Session
+     */
+    private $checkoutSession;
+
+    /**
      * AdyenSepaConfigProvider constructor.
      *
      * @param PaymentHelper $paymentHelper
      * @param \Adyen\Payment\Helper\Data $adyenHelper
      * @param \Magento\Framework\App\RequestInterface $request
      * @param \Magento\Framework\UrlInterface $urlBuilder
+     * @param \Magento\Checkout\Model\Session $checkoutSession
      */
     public function __construct(
         PaymentHelper $paymentHelper,
         \Adyen\Payment\Helper\Data $adyenHelper,
         \Magento\Framework\App\RequestInterface $request,
-        \Magento\Framework\UrlInterface $urlBuilder
+        \Magento\Framework\UrlInterface $urlBuilder,
+        \Magento\Checkout\Model\Session $checkoutSession
     ) {
         $this->_paymentHelper = $paymentHelper;
         $this->_adyenHelper = $adyenHelper;
         $this->_request = $request;
         $this->_urlBuilder = $urlBuilder;
+        $this->checkoutSession = $checkoutSession;
+
+        $this->_adyenHelper->setQuote($checkoutSession->getQuote());
     }
 
     /**

@@ -53,12 +53,18 @@ class Cc extends \Magento\Payment\Block\Form\Cc
     protected $_checkoutSession;
 
     /**
+     * @var \Magento\Backend\Model\Session\Quote
+     */
+    private $sessionQuote;
+
+    /**
      * Cc constructor.
      *
      * @param \Magento\Framework\View\Element\Template\Context $context
      * @param \Magento\Payment\Model\Config $paymentConfig
      * @param \Adyen\Payment\Helper\Data $adyenHelper
      * @param \Magento\Checkout\Model\Session $checkoutSession
+     * @param \Magento\Backend\Model\Session\Quote $sessionQuote
      * @param array $data
      */
     public function __construct(
@@ -66,6 +72,7 @@ class Cc extends \Magento\Payment\Block\Form\Cc
         \Magento\Payment\Model\Config $paymentConfig,
         \Adyen\Payment\Helper\Data $adyenHelper,
         \Magento\Checkout\Model\Session $checkoutSession,
+        \Magento\Backend\Model\Session\Quote $sessionQuote,
         array $data = []
     )
     {
@@ -73,6 +80,9 @@ class Cc extends \Magento\Payment\Block\Form\Cc
         $this->_adyenHelper = $adyenHelper;
         $this->_appState = $context->getAppState();
         $this->_checkoutSession = $checkoutSession;
+        $this->sessionQuote = $sessionQuote;
+
+        $this->_adyenHelper->setQuote($sessionQuote->getQuote());
     }
 
 
