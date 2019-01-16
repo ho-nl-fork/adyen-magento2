@@ -56,8 +56,6 @@ class AbstractInfo extends \Magento\Payment\Block\Info
         parent::__construct($context, $data);
         $this->_adyenHelper = $adyenHelper;
         $this->_adyenOrderPaymentCollectionFactory = $adyenOrderPaymentCollectionFactory;
-
-        $this->_adyenHelper->setOrder($this->getInfo()->getOrder());
     }
 
     /**
@@ -76,6 +74,6 @@ class AbstractInfo extends \Magento\Payment\Block\Info
     public function isDemoMode()
     {
         $storeId = $this->getInfo()->getOrder()->getStoreId();
-        return $this->_adyenHelper->getAdyenAbstractConfigDataFlag('demo_mode', $storeId);
+        return $this->_adyenHelper->setOrder($this->getInfo()->getOrder())->getAdyenAbstractConfigDataFlag('demo_mode', $storeId);
     }
 }
