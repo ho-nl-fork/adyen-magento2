@@ -1614,7 +1614,7 @@ class Cron
 
                 $this->_setPaymentAuthorized();
 
-                $invoiceAutoMail = (bool)$this->_scopeConfig->isSetFlag(
+                $invoiceAutoMail = (bool)$this->orderConfigProviderFactory->get($this->_order)->isSetFlag(
                     \Magento\Sales\Model\Order\Email\Container\InvoiceIdentity::XML_PATH_EMAIL_ENABLED,
                     \Magento\Store\Model\ScopeInterface::SCOPE_STORE,
                     $this->_order->getStoreId()
