@@ -109,6 +109,9 @@ class PaymentRequest extends DataObject
     {
         $order = $payment->getOrder();
         $storeId = $order->getStoreId();
+
+        $this->_adyenHelper->setOrder($order);
+
         $merchantAccount = $this->_adyenHelper->getAdyenAbstractConfigData("merchant_account", $storeId);
         $shopperIp = $order->getRemoteIp();
 
