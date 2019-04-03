@@ -1055,7 +1055,6 @@ class Cron
 
         // check if it is a split payment if so save the refunded data
         if ($this->_originalReference != "") {
-
             $this->_adyenLogger->addAdyenNotificationCronjob('Going to update the refund to split payments table');
 
             $orderPayment = $this->_adyenOrderPaymentCollectionFactory
@@ -1082,20 +1081,14 @@ class Cron
          */
         $lastTransactionId = $this->_order->getPayment()->getLastTransId();
         if ($lastTransactionId != $this->_pspReference) {
-
-            // refund is done through adyen backoffice so create an invoice
+            // refund is done through adyen backoffice so create a credit memo
             $order = $this->_order;
             if ($order->canCreditmemo()) {
-
-                // there is a bug in this function of Magento see #2656 magento\magento2 repo
-                // Invalid method Magento\Sales\Model\Order\Creditmemo::register
-                /*
                 $currency = $this->_order->getOrderCurrencyCode();
                 $amount = $this->_adyenHelper->originalAmount($this->_value, $currency);
                 $order->getPayment()->registerRefundNotification($amount);
-                */
 
-                $this->_adyenLogger->addAdyenNotificationCronjob('Please create your credit memo inside magento');
+                $this->_adyenLogger->addAdyenNotificationCronjob('Created credit memo for order');
             } else {
                 $this->_adyenLogger->addAdyenNotificationCronjob('Could not create a credit memo for order');
             }
