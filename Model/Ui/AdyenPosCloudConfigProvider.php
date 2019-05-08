@@ -44,27 +44,23 @@ class AdyenPosCloudConfigProvider implements ConfigProviderInterface
     protected $urlBuilder;
 
     /**
-     * @var \Magento\Checkout\Model\Session
-     */
-    private $checkoutSession;
-
-    /**
      * AdyenHppConfigProvider constructor.
      *
      * @param \Magento\Framework\App\RequestInterface $request
      * @param \Magento\Framework\UrlInterface $urlBuilder
+     * @param \Adyen\Payment\Helper\Data $adyenHelper
      * @param \Magento\Checkout\Model\Session $checkoutSession
      */
     public function __construct(
         \Magento\Framework\App\RequestInterface $request,
         \Magento\Framework\UrlInterface $urlBuilder,
+        \Adyen\Payment\Helper\Data $adyenHelper,
         \Magento\Checkout\Model\Session $checkoutSession
     ) {
         $this->request = $request;
         $this->urlBuilder = $urlBuilder;
-        $this->checkoutSession = $checkoutSession;
 
-        $this->_adyenHelper->setQuote($checkoutSession->getQuote());
+        $adyenHelper->setQuote($checkoutSession->getQuote());
     }
 
     /**
