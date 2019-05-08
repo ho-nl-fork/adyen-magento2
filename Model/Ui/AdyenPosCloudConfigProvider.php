@@ -13,10 +13,11 @@
  *                               #############
  *                               ############
  *
- * Adyen Payment module (https://www.adyen.com/)
+ * Adyen Payment Module
  *
- * Copyright (c) 2015 Adyen BV (https://www.adyen.com/)
- * See LICENSE.txt for license details.
+ * Copyright (c) 2018 Adyen B.V.
+ * This file is open source and available under the MIT license.
+ * See the LICENSE file for more info.
  *
  * Author: Adyen <magento@adyen.com>
  */
@@ -24,35 +25,23 @@
 namespace Adyen\Payment\Model\Ui;
 
 use Magento\Checkout\Model\ConfigProviderInterface;
-use Magento\Payment\Helper\Data as PaymentHelper;
-use Magento\Directory\Helper\Data;
 
-class AdyenPosConfigProvider implements ConfigProviderInterface
+class AdyenPosCloudConfigProvider implements ConfigProviderInterface
 {
 
-    const CODE = 'adyen_pos';
-
-    /**
-     * @var PaymentHelper
-     */
-    protected $_paymentHelper;
-
-    /**
-     * @var \Adyen\Payment\Helper\Data
-     */
-    protected $_adyenHelper;
+    const CODE = 'adyen_pos_cloud';
 
     /**
      * Request object
      *
      * @var \Magento\Framework\App\RequestInterface
      */
-    protected $_request;
+    protected $request;
 
     /**
      * @var \Magento\Framework\UrlInterface
      */
-    protected $_urlBuilder;
+    protected $urlBuilder;
 
     /**
      * @var \Magento\Checkout\Model\Session
@@ -62,30 +51,24 @@ class AdyenPosConfigProvider implements ConfigProviderInterface
     /**
      * AdyenHppConfigProvider constructor.
      *
-     * @param PaymentHelper $paymentHelper
-     * @param \Adyen\Payment\Helper\Data $adyenHelper
      * @param \Magento\Framework\App\RequestInterface $request
      * @param \Magento\Framework\UrlInterface $urlBuilder
      * @param \Magento\Checkout\Model\Session $checkoutSession
      */
     public function __construct(
-        PaymentHelper $paymentHelper,
-        \Adyen\Payment\Helper\Data $adyenHelper,
         \Magento\Framework\App\RequestInterface $request,
         \Magento\Framework\UrlInterface $urlBuilder,
         \Magento\Checkout\Model\Session $checkoutSession
     ) {
-        $this->_paymentHelper = $paymentHelper;
-        $this->_adyenHelper = $adyenHelper;
-        $this->_request = $request;
-        $this->_urlBuilder = $urlBuilder;
+        $this->request = $request;
+        $this->urlBuilder = $urlBuilder;
         $this->checkoutSession = $checkoutSession;
 
         $this->_adyenHelper->setQuote($checkoutSession->getQuote());
     }
 
     /**
-     * Set configuration for AdyenHPP payemnt method
+     * Set configuration for POS Cloud Api payment method
      *
      * @return array
      */
@@ -96,8 +79,10 @@ class AdyenPosConfigProvider implements ConfigProviderInterface
             'payment' => [
                 self::CODE => [
                     'isActive' => true,
-                    'redirectUrl' => $this->_urlBuilder->getUrl(
-                        'adyen/process/redirectPos', ['_secure' => $this->_getRequest()->isSecure()])
+                    'redirectUrl' => $this->urlBuilder->getUrl(
+                        '/checkout/onepage/success/',
+                        ['_secure' => $this->getRequest()->isSecure()]
+                    )
                 ]
             ]
         ];
@@ -110,8 +95,8 @@ class AdyenPosConfigProvider implements ConfigProviderInterface
      *
      * @return \Magento\Framework\App\RequestInterface
      */
-    protected function _getRequest()
+    protected function getRequest()
     {
-        return $this->_request;
+        return $this->request;
     }
 }

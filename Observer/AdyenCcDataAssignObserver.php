@@ -32,18 +32,28 @@ use Magento\Quote\Api\Data\PaymentInterface;
 class AdyenCcDataAssignObserver extends AbstractDataAssignObserver
 {
     const CC_TYPE = 'cc_type';
-    const ENCRYPTED_DATA = 'encrypted_data';
     const NUMBER_OF_INSTALLMENTS = 'number_of_installments';
     const STORE_CC = 'store_cc';
+    const ENCRYPTED_CREDIT_CARD_NUMBER = 'number';
+    const ENCRYPTED_SECURITY_CODE = 'cvc';
+    const ENCRYPTED_EXPIRY_MONTH = 'expiryMonth';
+    const ENCRYPTED_EXPIRY_YEAR = 'expiryYear';
+    const HOLDER_NAME = 'holderName';
+    const VARIANT = 'variant';
 
     /**
      * @var array
      */
     protected $additionalInformationList = [
         self::CC_TYPE,
-        self::ENCRYPTED_DATA,
         self::NUMBER_OF_INSTALLMENTS,
-        self::STORE_CC
+        self::STORE_CC,
+        self::ENCRYPTED_CREDIT_CARD_NUMBER,
+        self::ENCRYPTED_SECURITY_CODE,
+        self::ENCRYPTED_EXPIRY_MONTH,
+        self::ENCRYPTED_EXPIRY_YEAR,
+        self::HOLDER_NAME,
+        self::VARIANT
     ];
 
     /**
@@ -62,10 +72,10 @@ class AdyenCcDataAssignObserver extends AbstractDataAssignObserver
         $paymentInfo = $this->readPaymentModelArgument($observer);
 
         // set ccType
-        if(!empty($additionalData['cc_type'])) {
+        if (!empty($additionalData['cc_type'])) {
             $paymentInfo->setCcType($additionalData['cc_type']);
         }
-        
+
         foreach ($this->additionalInformationList as $additionalInformationKey) {
             if (!empty($additionalData[$additionalInformationKey])) {
                 $paymentInfo->setAdditionalInformation(

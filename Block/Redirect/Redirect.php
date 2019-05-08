@@ -84,8 +84,7 @@ class Redirect extends \Magento\Payment\Block\Form
         \Adyen\Payment\Logger\AdyenLogger $adyenLogger,
         \Magento\Tax\Model\Config $taxConfig,
         \Magento\Tax\Model\Calculation $taxCalculation
-    )
-    {
+    ) {
         $this->_orderFactory = $orderFactory;
         $this->_checkoutSession = $checkoutSession;
         parent::__construct($context, $data);
@@ -128,13 +127,12 @@ class Redirect extends \Magento\Payment\Block\Form
                         if ($paymentRoutine == 'single' && $this->getPaymentMethodSelectionOnAdyen()) {
                             $url = 'https://test.adyen.com/hpp/pay.shtml';
                         } else {
-
                             if ($this->getPaymentMethodSelectionOnAdyen()) {
                                 $url = 'https://test.adyen.com/hpp/select.shtml';
                             } else {
-                                if ($this->_adyenHelper->isPaymentMethodOpenInvoiceMethod(
-                                    $this->_order->getPayment()->getAdditionalInformation('brand_code')
-                                )
+                                if ($this->_adyenHelper->doesPaymentMethodSkipDetails(
+                                        $this->_order->getPayment()->getAdditionalInformation('brand_code')
+                                    )
                                 ) {
                                     $url = "https://test.adyen.com/hpp/skipDetails.shtml";
                                 } else {
@@ -150,9 +148,9 @@ class Redirect extends \Magento\Payment\Block\Form
                             if ($this->getPaymentMethodSelectionOnAdyen()) {
                                 $url = 'https://live.adyen.com/hpp/select.shtml';
                             } else {
-                                if ($this->_adyenHelper->isPaymentMethodOpenInvoiceMethod(
-                                    $this->_order->getPayment()->getAdditionalInformation('brand_code')
-                                )
+                                if ($this->_adyenHelper->doesPaymentMethodSkipDetails(
+                                        $this->_order->getPayment()->getAdditionalInformation('brand_code')
+                                    )
                                 ) {
                                     $url = "https://live.adyen.com/hpp/skipDetails.shtml";
                                 } else {
@@ -187,14 +185,14 @@ class Redirect extends \Magento\Payment\Block\Form
         $formFields = [];
         try {
             if ($this->_order->getPayment()) {
-
                 $realOrderId = $this->_order->getRealOrderId();
                 $orderCurrencyCode = $this->_order->getOrderCurrencyCode();
                 $skinCode = trim($this->_adyenHelper->getAdyenHppConfigData('skin_code'));
                 $amount = $this->_adyenHelper->formatAmount(
-                    $this->_order->getGrandTotal(), $orderCurrencyCode
+                    $this->_order->getGrandTotal(),
+                    $orderCurrencyCode
                 );
-                $merchantAccount = trim($this->_adyenHelper->getAdyenAbstractConfigData('merchant_account'));
+                $merchantAccount = trim($this->_adyenHelper->getAdyenAbstractConfigData('merchant_account', $this->_order->getStoreId()));
                 $shopperEmail = $this->_order->getCustomerEmail();
                 $customerId = $this->_order->getCustomerId();
                 $shopperIP = $this->_order->getRemoteIp();
@@ -235,9 +233,7 @@ class Redirect extends \Magento\Payment\Block\Form
                 );
                 $formFields['shopperEmail'] = $shopperEmail;
                 // recurring
-                $recurringType = trim($this->_adyenHelper->getAdyenAbstractConfigData(
-                    'recurring_type')
-                );
+                $recurringType = $this->_adyenHelper->getRecurringTypeFromOneclickRecurringSetting();
                 $brandCode = $this->_order->getPayment()->getAdditionalInformation(
                     \Adyen\Payment\Observer\AdyenHppDataAssignObserver::BRAND_CODE
                 );
@@ -314,7 +310,6 @@ class Redirect extends \Magento\Payment\Block\Form
 
                 $this->_adyenLogger->addAdyenDebug(print_r($formFields, true));
             }
-
         } catch (Exception $e) {
             // do nothing for now
         }
@@ -338,16 +333,21 @@ class Redirect extends \Magento\Payment\Block\Form
 
             $formFields['shopper.lastName'] = trim($billingAddress->getLastname());
             $formFields['shopper.telephoneNumber'] = trim($billingAddress->getTelephone());
-            $street = $this->_adyenHelper->getStreet($billingAddress);
 
-            if (isset($street['name']) && $street['name'] != "") {
-                $formFields['billingAddress.street'] = $street['name'];
-            }
+            if ($this->_adyenHelper->isSeparateHouseNumberRequired($billingAddress->getCountryId())) {
+                $street = $this->_adyenHelper->getStreet($billingAddress);
 
-            if (isset($street['house_number']) && $street['house_number'] != "") {
-                $formFields['billingAddress.houseNumberOrName'] = $street['house_number'];
+                if (isset($street['name']) && $street['name'] != "") {
+                    $formFields['billingAddress.street'] = $street['name'];
+                }
+
+                if (isset($street['house_number']) && $street['house_number'] != "") {
+                    $formFields['billingAddress.houseNumberOrName'] = $street['house_number'];
+                } else {
+                    $formFields['billingAddress.houseNumberOrName'] = "NA";
+                }
             } else {
-                $formFields['billingAddress.houseNumberOrName'] = "NA";
+                $formFields['billingAddress.street'] = implode(" ", $billingAddress->getStreet());
             }
 
             if (trim($billingAddress->getCity()) == "") {
@@ -387,18 +387,22 @@ class Redirect extends \Magento\Payment\Block\Form
         $shippingAddress = $this->_order->getShippingAddress();
 
         if ($shippingAddress) {
+            if ($this->_adyenHelper->isSeparateHouseNumberRequired($shippingAddress->getCountryId())) {
+                $street = $this->_adyenHelper->getStreet($shippingAddress);
 
-            $street = $this->_adyenHelper->getStreet($shippingAddress);
+                if (isset($street['name']) && $street['name'] != "") {
+                    $formFields['deliveryAddress.street'] = $street['name'];
+                }
 
-            if (isset($street['name']) && $street['name'] != "") {
-                $formFields['deliveryAddress.street'] = $street['name'];
-            }
-
-            if (isset($street['house_number']) && $street['house_number'] != "") {
-                $formFields['deliveryAddress.houseNumberOrName'] = $street['house_number'];
+                if (isset($street['house_number']) && $street['house_number'] != "") {
+                    $formFields['deliveryAddress.houseNumberOrName'] = $street['house_number'];
+                } else {
+                    $formFields['deliveryAddress.houseNumberOrName'] = "NA";
+                }
             } else {
-                $formFields['deliveryAddress.houseNumberOrName'] = "NA";
+                $formFields['deliveryAddress.street'] = implode(" ", $shippingAddress->getStreet());
             }
+
 
             if (trim($shippingAddress->getCity()) == "") {
                 $formFields['deliveryAddress.city'] = "NA";
@@ -424,6 +428,7 @@ class Redirect extends \Magento\Payment\Block\Form
                 $formFields['deliveryAddress.country'] = trim($shippingAddress->getCountryId());
             }
         }
+
         return $formFields;
     }
 
@@ -437,7 +442,7 @@ class Redirect extends \Magento\Payment\Block\Form
         $currency = $this->_order->getOrderCurrencyCode();
 
         foreach ($this->_order->getAllVisibleItems() as $item) {
-
+            /** @var $item \Magento\Sales\Model\Order\Item */
             ++$count;
             $numberOfItems = (int)$item->getQtyOrdered();
 
@@ -451,7 +456,8 @@ class Redirect extends \Magento\Payment\Block\Form
                 $item->getPriceInclTax(),
                 $item->getTaxPercent(),
                 $numberOfItems,
-                $this->_order->getPayment()
+                $this->_order->getPayment(),
+                $item->getId()
             );
         }
 
@@ -465,13 +471,22 @@ class Redirect extends \Magento\Payment\Block\Form
             $itemVatPercentage = "0";
             $numberOfItems = 1;
 
-            $formFields = $this->_adyenHelper->getOpenInvoiceLineData($formFields, $count, $currency, $description, $itemAmount,
-                $itemVatAmount, $itemVatPercentage, $numberOfItems, $this->_order->getPayment());
+            $formFields = $this->_adyenHelper->getOpenInvoiceLineData(
+                $formFields,
+                $count,
+                $currency,
+                $description,
+                $itemAmount,
+                $itemVatAmount,
+                $itemVatPercentage,
+                $numberOfItems,
+                $this->_order->getPayment(),
+                "discount"
+            );
         }
 
         // Shipping cost
         if ($this->_order->getShippingAmount() > 0 || $this->_order->getShippingTaxAmount() > 0) {
-
             ++$count;
             $formFields = $this->_adyenHelper->createOpenInvoiceLineShipping(
                 $formFields,

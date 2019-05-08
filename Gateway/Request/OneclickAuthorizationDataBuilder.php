@@ -23,6 +23,7 @@
 
 namespace Adyen\Payment\Gateway\Request;
 
+use Adyen\Payment\Observer\AdyenOneclickDataAssignObserver;
 use Magento\Payment\Gateway\Request\BuilderInterface;
 
 class OneclickAuthorizationDataBuilder implements BuilderInterface
@@ -53,7 +54,18 @@ class OneclickAuthorizationDataBuilder implements BuilderInterface
         /** @var \Magento\Payment\Gateway\Data\PaymentDataObject $paymentDataObject */
         $paymentDataObject = \Magento\Payment\Gateway\Helper\SubjectReader::readPayment($buildSubject);
         $payment = $paymentDataObject->getPayment();
-        $recurringDetailReference = $payment->getAdditionalInformation("recurring_detail_reference");
+
+        // If ccType is set use this. For bcmc you need bcmc otherwise it will fail
+        $request['paymentMethod']['type'] = "scheme";
+        if ($variant = $payment->getAdditionalInformation(AdyenOneclickDataAssignObserver::VARIANT)) {
+            $request['paymentMethod']['type'] = $variant;
+        }
+
+        if ($securityCode = $payment->getAdditionalInformation(AdyenOneclickDataAssignObserver::ENCRYPTED_SECURITY_CODE)) {
+            $request['paymentMethod']['encryptedSecurityCode'] = $securityCode;
+        }
+
+        $payment->unsAdditionalInformation(AdyenOneclickDataAssignObserver::ENCRYPTED_SECURITY_CODE);
 
         if ($payment->getAdditionalInformation('customer_interaction')) {
             $shopperInteraction = "Ecommerce";
@@ -61,8 +73,8 @@ class OneclickAuthorizationDataBuilder implements BuilderInterface
             $shopperInteraction = "ContAuth";
         }
 
-        $request['selectedRecurringDetailReference'] =  $recurringDetailReference;
         $request['shopperInteraction'] = $shopperInteraction;
+        $request['paymentMethod']['recurringDetailReference'] = $payment->getAdditionalInformation(AdyenOneclickDataAssignObserver::RECURRING_DETAIL_REFERENCE);
 
         // if it is a sepadirectdebit set selectedBrand to sepadirectdebit in the case of oneclick
         if ($payment->getCcType() == "sepadirectdebit") {
@@ -77,6 +89,11 @@ class OneclickAuthorizationDataBuilder implements BuilderInterface
             if ($payment->getCcType() == "directEbanking" || $payment->getCcType() == "ideal") {
                 $request['selectedBrand'] = "sepadirectdebit";
             }
+        }
+
+        // if installments is set add it into the request
+        if ($payment->getAdditionalInformation(AdyenOneclickDataAssignObserver::NUMBER_OF_INSTALLMENTS) > 0) {
+            $request['installments']['value'] = $payment->getAdditionalInformation(AdyenOneclickDataAssignObserver::NUMBER_OF_INSTALLMENTS);
         }
 
         return $request;

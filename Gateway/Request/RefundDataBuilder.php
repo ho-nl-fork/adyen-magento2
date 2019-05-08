@@ -76,7 +76,8 @@ class RefundDataBuilder implements BuilderInterface
         $pspReference = $payment->getCcTransId();
         $currency = $payment->getOrder()->getOrderCurrencyCode();
         $storeId = $order->getStoreId();
-        $merchantAccount = $this->adyenHelper->getAdyenAbstractConfigData("merchant_account", $storeId);
+        $method = $payment->getMethod();
+        $merchantAccount = $this->adyenHelper->getAdyenMerchantAccount($method, $storeId);
         $grandTotal = $payment->getOrder()->getGrandTotal();
 
 
@@ -87,7 +88,6 @@ class RefundDataBuilder implements BuilderInterface
 
         // partial refund if multiple payments check refund strategy
         if ($orderPaymentCollection->getSize() > 1) {
-
             $refundStrategy = $this->adyenHelper->getAdyenAbstractConfigData(
                 'split_payments_refund_strategy',
                 $order->getStoreId()
@@ -172,7 +172,6 @@ class RefundDataBuilder implements BuilderInterface
                 //There is only one payment, so we add the fields to the first(and only) result
                 $result[0]["additionalData"] = $openInvoiceFields;
             }
-
         }
 
         return $result;
@@ -192,7 +191,7 @@ class RefundDataBuilder implements BuilderInterface
 
         foreach ($creditMemo->getAllItems() as $refundItem) {
             ++$count;
-            $numberOfItems = $refundItem->getQty();
+            $numberOfItems = (int)$refundItem->getQty();
 
             $formFields = $this->adyenHelper->createOpenInvoiceLineItem(
                 $formFields,
@@ -204,9 +203,9 @@ class RefundDataBuilder implements BuilderInterface
                 $refundItem->getPriceInclTax(),
                 $refundItem->getTaxPercent(),
                 $numberOfItems,
-                $payment
+                $payment,
+                $refundItem->getId()
             );
-
         }
 
         // Shipping cost
@@ -232,7 +231,7 @@ class RefundDataBuilder implements BuilderInterface
 
         $invoice = $invoices->getFirstItem();
 
-        if($invoice) {
+        if ($invoice) {
             $formFields['acquirerReference'] = $invoice->getAcquirerReference();
         }
 

@@ -15,7 +15,7 @@
  *
  * Adyen Payment module (https://www.adyen.com/)
  *
- * Copyright (c) 2015 Adyen BV (https://www.adyen.com/)
+ * Copyright (c) 2019 Adyen BV (https://www.adyen.com/)
  * See LICENSE.txt for license details.
  *
  * Author: Adyen <magento@adyen.com>
@@ -49,8 +49,7 @@ class VaultDetailsHandler implements HandlerInterface
     public function __construct(
         PaymentTokenFactoryInterface $paymentTokenFactory,
         \Adyen\Payment\Logger\AdyenLogger $adyenLogger
-    )
-    {
+    ) {
         $this->_adyenLogger = $adyenLogger;
         $this->paymentTokenFactory = $paymentTokenFactory;
     }
@@ -74,7 +73,6 @@ class VaultDetailsHandler implements HandlerInterface
         }
     }
 
-
     /**
      * Get vault payment token entity
      *
@@ -83,64 +81,84 @@ class VaultDetailsHandler implements HandlerInterface
      */
     private function getVaultPaymentToken(array $response)
     {
-        $additionalData = $response['additionalData'];
+        $paymentToken = null;
 
-        if(empty($additionalData['recurring.recurringDetailReference'])) {
-            $this->_adyenLogger->error("Missing Token in Result please send email to magento@adyen.com to enable the rechargeSynchronousStoreDetails property");
-            return null;
+        if (!empty($response['additionalData'])) {
+            $additionalData = $response['additionalData'];
+
+
+            if (empty($additionalData['recurring.recurringDetailReference'])) {
+                $this->_adyenLogger->error(
+                    'Missing Token in Result please enable in ' .
+                    'Settings -> API URLs and Response menu in the Adyen Customer Area Recurring details setting'
+                );
+                return null;
+            }
+            $token = $additionalData['recurring.recurringDetailReference'];
+
+
+            if (empty($additionalData['cardSummary'])) {
+                $this->_adyenLogger->error(
+                    'Missing cardSummary in Result please login to the adyen portal ' .
+                    'and go to Settings -> API URLs and Response and enable the Card summary property'
+                );
+                return null;
+            }
+            $cardSummary = $additionalData['cardSummary'];
+
+            if (empty($additionalData['expiryDate'])) {
+                $this->_adyenLogger->error(
+                    'Missing expiryDate in Result please login to the adyen portal and go to ' .
+                    'Settings -> API URLs and Response and enable the Expiry date property'
+                );
+                return null;
+            }
+            $expirationDate = $additionalData['expiryDate'];
+
+            if (empty($additionalData['paymentMethod'])) {
+                $this->_adyenLogger->error(
+                    'Missing paymentMethod in Result please login to the adyen portal and go to ' .
+                    'Settings -> API URLs and Response and enable the Variant property'
+                );
+                return null;
+            }
+
+            $cardType = $additionalData['paymentMethod'];
+
+            try {
+                /** @var PaymentTokenInterface $paymentToken */
+                $paymentToken = $this->paymentTokenFactory->create(
+                    PaymentTokenFactoryInterface::TOKEN_TYPE_CREDIT_CARD
+                );
+                $paymentToken->setGatewayToken($token);
+                $paymentToken->setExpiresAt($this->getExpirationDate($expirationDate));
+
+                $details = [
+                    'type' => $cardType,
+                    'maskedCC' => $cardSummary,
+                    'expirationDate' => $expirationDate
+                ];
+
+                $paymentToken->setTokenDetails(json_encode($details));
+            } catch (\Exception $e) {
+                $this->_adyenLogger->error(print_r($e, true));
+            }
         }
-        $token = $additionalData['recurring.recurringDetailReference'];
 
-
-        if (empty($additionalData['cardSummary'])) {
-            $this->_adyenLogger->error("Missing cardSummary in Result please login to the adyen portal and go to Settings -> API and Response and enable the Card summary property");
-            return null;
-        }
-        $cardSummary = $additionalData['cardSummary'];
-
-        if (empty($additionalData['expiryDate'])) {
-            $this->_adyenLogger->error("Missing expiryDate in Result please login to the adyen portal and go to Settings -> API and Response and enable the Expiry date property");
-            return null;
-        }
-        $expirationDate = $additionalData['expiryDate'];
-
-        if (empty($additionalData['paymentMethod'])) {
-            $this->_adyenLogger->error("Missing paymentMethod in Result please login to the adyen portal and go to Settings -> API and Response and enable the Variant property");
-            return null;
-        }
-
-        $cardType = $additionalData['paymentMethod'];
-
-        try {
-            /** @var PaymentTokenInterface $paymentToken */
-            $paymentToken = $this->paymentTokenFactory->create(PaymentTokenFactoryInterface::TOKEN_TYPE_CREDIT_CARD);
-            $paymentToken->setGatewayToken($token);
-            $paymentToken->setExpiresAt($this->getExpirationDate($expirationDate));
-
-            $details = [
-                'type' => $cardType,
-                'maskedCC' => $cardSummary,
-                'expirationDate' => $expirationDate
-            ];
-
-            $paymentToken->setTokenDetails(json_encode($details));
-        } catch(Exception $e) {
-            $this->_adyenLogger->error(print_r($e, true));
-        }
         return $paymentToken;
     }
-
 
     /**
      * @param $expirationDate
      * @return string
+     * @throws \Exception
      */
     private function getExpirationDate($expirationDate)
     {
         $expirationDate = explode('/', $expirationDate);
 
         //add leading zero to month
-        $month = sprintf("%02d", $expirationDate[0]);
+        $month = sprintf('%02d', $expirationDate[0]);
 
         $expDate = new \DateTime(
             $expirationDate[1]
@@ -172,6 +190,4 @@ class VaultDetailsHandler implements HandlerInterface
         }
         return $extensionAttributes;
     }
-
-
 }

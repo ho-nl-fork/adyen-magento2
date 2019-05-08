@@ -13,22 +13,21 @@
  *                               #############
  *                               ############
  *
- * Adyen Payment module (https://www.adyen.com/)
+ * Adyen Payment Module
  *
- * Copyright (c) 2015 Adyen BV (https://www.adyen.com/)
- * See LICENSE.txt for license details.
+ * Copyright (c) 2018 Adyen B.V.
+ * This file is open source and available under the MIT license.
+ * See the LICENSE file for more info.
  *
  * Author: Adyen <magento@adyen.com>
  */
 
-// @codingStandardsIgnoreFile
+namespace Adyen\Payment\Block\Info;
 
-?>
-<?php
-$_info = $this->getInfo();
-?>
-
-<dl class="payment-method adyen_pos">
-    <?php echo $this->escapeHtml($this->getMethod()->getTitle()) ?><br/>
-    <dt class="title"><?php echo $block->escapeHtml($block->getMethod()->getTitle()) ?></dt>
-</dl>
+class PosCloud extends AbstractInfo
+{
+    /**
+     * @var string
+     */
+    protected $_template = 'Adyen_Payment::info/adyen_pos_cloud.phtml';
+}

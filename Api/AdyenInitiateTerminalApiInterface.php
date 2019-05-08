@@ -1,5 +1,4 @@
-<?xml version="1.0"?>
-<!--
+<?php
 /**
  *                       ######
  *                       ######
@@ -14,16 +13,22 @@
  *                               #############
  *                               ############
  *
- * Adyen Payment module (https://www.adyen.com/)
+ * Adyen Payment Module
  *
- * Copyright (c) 2015 Adyen BV (https://www.adyen.com/)
- * See LICENSE.txt for license details.
+ * Copyright (c) 2018 Adyen B.V.
+ * This file is open source and available under the MIT license.
+ * See the LICENSE file for more info.
  *
  * Author: Adyen <magento@adyen.com>
  */
--->
-<layout xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:View/Layout/etc/layout_generic.xsd">
-    <container name="root">
-        <block class="Adyen\Payment\Block\Redirect\Pos" name="adyen-pos-redirect-form" template="redirect/pos/form.phtml" cacheable="false"/>
-    </container>
-</layout>
+
+namespace Adyen\Payment\Api;
+
+interface AdyenInitiateTerminalApiInterface
+{
+    /**
+     * Trigger sync call on terminal
+     * @return mixed
+     */
+    public function initiate();
+}

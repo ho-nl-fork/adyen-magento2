@@ -31,6 +31,10 @@ class Installments extends \Magento\Config\Block\System\Config\Form\Field\FieldA
      */
     protected $_installmentRenderer = null;
 
+
+    /**
+     * @var \Adyen\Payment\Block\Adminhtml\System\Config\Field\Cctypes
+     */
     protected $_ccTypesRenderer = null;
 
     /**
@@ -104,7 +108,7 @@ class Installments extends \Magento\Config\Block\System\Config\Form\Field\FieldA
      * Prepare existing row data object
      *
      * @param \Magento\Framework\DataObject $row
-     * @return void
+     * @throws \Magento\Framework\Exception\LocalizedException
      */
     protected function _prepareArrayRow(\Magento\Framework\DataObject $row)
     {
@@ -112,7 +116,6 @@ class Installments extends \Magento\Config\Block\System\Config\Form\Field\FieldA
 
         $options = [];
         if ($installlments) {
-            
             $options['option_' . $this->getNumberOfInstallmentsRenderer()->calcOptionHash($installlments)]
                 = 'selected="selected"';
 
@@ -126,6 +129,5 @@ class Installments extends \Magento\Config\Block\System\Config\Form\Field\FieldA
             }
         }
         $row->setData('option_extra_attrs', $options);
-        return;
     }
 }

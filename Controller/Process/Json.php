@@ -24,6 +24,7 @@
 namespace Adyen\Payment\Controller\Process;
 
 use Symfony\Component\Config\Definition\Exception\Exception;
+use Magento\Framework\App\Request\Http as HttpRequest;
 
 /**
  * Class Json
@@ -62,13 +63,20 @@ class Json extends \Magento\Framework\App\Action\Action
         \Magento\Framework\App\Action\Context $context,
         \Adyen\Payment\Helper\Data $adyenHelper,
         \Adyen\Payment\Logger\AdyenLogger $adyenLogger
-    )
-    {
+    ) {
         parent::__construct($context);
         $this->_objectManager = $context->getObjectManager();
         $this->_resultFactory = $context->getResultFactory();
         $this->_adyenHelper = $adyenHelper;
         $this->_adyenLogger = $adyenLogger;
+        
+        // Fix for Magento2.3 adding isAjax to the request params
+        if(interface_exists("\Magento\Framework\App\CsrfAwareActionInterface")) {
+            $request = $this->getRequest();
+            if ($request instanceof HttpRequest && $request->isPost()) {
+                $request->setParam('isAjax', true);
+            }
+        }
     }
 
     /**
@@ -76,11 +84,9 @@ class Json extends \Magento\Framework\App\Action\Action
      */
     public function execute()
     {
-
         // if version is in the notification string show the module version
         $response = $this->getRequest()->getParams();
         if (isset($response['version'])) {
-
             $this->getResponse()
                 ->clearHeader('Content-Type')
                 ->setHeader('Content-Type', 'text/html')
@@ -92,19 +98,14 @@ class Json extends \Magento\Framework\App\Action\Action
         try {
             $notificationItems = json_decode(file_get_contents('php://input'), true);
 
-            // log the notification
-            $this->_adyenLogger->addAdyenNotification(
-                "The content of the notification is: " . print_r($notificationItems, 1)
-            );
-
             $notificationMode = isset($notificationItems['live']) ? $notificationItems['live'] : "";
 
             if ($notificationMode !== "" && $this->_validateNotificationMode($notificationMode)) {
+
                 foreach ($notificationItems['notificationItems'] as $notificationItem) {
-
-
                     $status = $this->_processNotification(
-                        $notificationItem['NotificationRequestItem'], $notificationMode
+                        $notificationItem['NotificationRequestItem'],
+                        $notificationMode
                     );
 
                     if ($status != true) {
@@ -113,7 +114,6 @@ class Json extends \Magento\Framework\App\Action\Action
                     }
 
                     $acceptedMessage = "[accepted]";
-
                 }
                 $cronCheckTest = $notificationItems['notificationItems'][0]['NotificationRequestItem']['pspReference'];
 
@@ -173,6 +173,11 @@ class Json extends \Magento\Framework\App\Action\Action
     {
         // validate the notification
         if ($this->authorised($response)) {
+
+            // log the notification
+            $this->_adyenLogger->addAdyenNotification(
+                "The content of the notification item is: " . print_r($response, 1)
+            );
 
             // check if notification already exists
             if (!$this->_isDuplicate($response)) {
@@ -267,21 +272,15 @@ class Json extends \Magento\Framework\App\Action\Action
             return false;
         }
 
-        $accountCmp = !$this->_adyenHelper->getAdyenAbstractConfigDataFlag('multiple_merchants')
-            ? strcmp($submitedMerchantAccount, $internalMerchantAccount)
-            : 0;
-
         $usernameCmp = strcmp($_SERVER['PHP_AUTH_USER'], $username);
         $passwordCmp = strcmp($_SERVER['PHP_AUTH_PW'], $password);
-        if ($accountCmp === 0 && $usernameCmp === 0 && $passwordCmp === 0) {
+        if ($usernameCmp === 0 && $passwordCmp === 0) {
             return true;
         }
 
         // If notification is test check if fields are correct if not return error
         if ($this->_isTestNotification($response['pspReference'])) {
-            if ($accountCmp != 0) {
-                $this->_returnResult('MerchantAccount in notification is not the same as in Magento settings');
-            } elseif ($usernameCmp != 0 || $passwordCmp != 0) {
+            if ($usernameCmp != 0 || $passwordCmp != 0) {
                 $this->_returnResult(
                     'username (PHP_AUTH_USER) and\or password (PHP_AUTH_PW) are not the same as Magento settings'
                 );

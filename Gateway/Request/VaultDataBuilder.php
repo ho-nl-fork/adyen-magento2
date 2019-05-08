@@ -15,7 +15,7 @@
  *
  * Adyen Payment module (https://www.adyen.com/)
  *
- * Copyright (c) 2015 Adyen BV (https://www.adyen.com/)
+ * Copyright (c) 2019 Adyen BV (https://www.adyen.com/)
  * See LICENSE.txt for license details.
  *
  * Author: Adyen <magento@adyen.com>
@@ -24,31 +24,40 @@
 namespace Adyen\Payment\Gateway\Request;
 
 use Magento\Payment\Gateway\Request\BuilderInterface;
+use Magento\Vault\Model\Ui\VaultConfigProvider;
+use \Magento\Payment\Gateway\Helper\SubjectReader;
 
 class VaultDataBuilder implements BuilderInterface
 {
 
     /**
-     * Additional options in request to gateway
+     * Recurring variable
+     * @var string
      */
-    const OPTIONS = 'options';
+    private static $enableRecurring = 'enableRecurring';
 
     /**
-     * The option that determines whether the payment method associated with
-     * the successful transaction should be stored in the Vault.
-     */
-    const STORE_IN_VAULT_ON_SUCCESS = 'storeInVaultOnSuccess';
-
-    /**
-     * @inheritdoc
+     * @param array $buildSubject
+     * @return array
      */
     public function build(array $buildSubject)
     {
-
-        // indicates if the user want to store it or not
-        // ignore for now
-        // needs to define if we need to store it as oneclick or recurring
+        // vault is enabled and shopper provided consent to store card this logic is triggered
         $request = [];
+        $paymentDO = SubjectReader::readPayment($buildSubject);
+
+        $payment = $paymentDO->getPayment();
+        $data = $payment->getAdditionalInformation();
+
+        if (!empty($data[VaultConfigProvider::IS_ACTIVE_CODE]) &&
+            $data[VaultConfigProvider::IS_ACTIVE_CODE] === true
+        ) {
+            // store it only as oneclick otherwise we store oneclick tokens (maestro+bcmc) that will fail
+            $request[self::$enableRecurring] = true;
+        } else {
+            // explicity turn this off as merchants have recurring on by default
+            $request[self::$enableRecurring] = false;
+        }
         return $request;
     }
 }

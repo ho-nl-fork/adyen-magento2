@@ -33,7 +33,7 @@ use Magento\Payment\Observer\AbstractDataAssignObserver;
 class BeforeShipmentObserver extends AbstractDataAssignObserver
 {
 
-    private $_adyenHelper;
+    private $adyenHelper;
 
     /**
      * BeforeShipmentObserver constructor.
@@ -42,9 +42,8 @@ class BeforeShipmentObserver extends AbstractDataAssignObserver
      */
     public function __construct(
         \Adyen\Payment\Helper\Data $adyenHelper
-    )
-    {
-        $this->_adyenHelper = $adyenHelper;
+    ) {
+        $this->adyenHelper = $adyenHelper;
     }
 
     /**
@@ -55,19 +54,15 @@ class BeforeShipmentObserver extends AbstractDataAssignObserver
     {
         $shipment = $observer->getEvent()->getShipment();
         $order = $shipment->getOrder();
-
-        $this->_adyenHelper->setOrder($order);
-
-        $captureOnShipment = $this->_adyenHelper->getConfigData('capture_on_shipment', 'adyen_abstract', $order->getStoreId());
+        $captureOnShipment = $this->adyenHelper->getConfigData('capture_on_shipment', 'adyen_abstract', $order->getStoreId());
 
         if ($this->isPaymentMethodAdyen($order) && $captureOnShipment) {
-
             $payment = $order->getPayment();
             $brandCode = $payment->getAdditionalInformation(
                 \Adyen\Payment\Observer\AdyenHppDataAssignObserver::BRAND_CODE
             );
 
-            if ($this->_adyenHelper->isPaymentMethodOpenInvoiceMethod($brandCode)) {
+            if ($this->adyenHelper->isPaymentMethodOpenInvoiceMethod($brandCode)) {
                 if ($order->canInvoice()) {
                     try {
                         $invoice = $order->prepareInvoice();
@@ -78,8 +73,8 @@ class BeforeShipmentObserver extends AbstractDataAssignObserver
                         $invoice->setTransactionId($pspReference);
                         $invoice->register()->pay();
                         $invoice->save();
-                    } catch (Exception $e) {
-                        throw new Exception(sprintf('Error saving invoice. The error message is:', $e->getMessage()));
+                    } catch (\Exception $e) {
+                        throw new \Exception(sprintf('Error saving invoice. The error message is:', $e->getMessage()));
                     }
                 }
             }

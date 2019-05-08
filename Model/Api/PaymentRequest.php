@@ -78,25 +78,14 @@ class PaymentRequest extends DataObject
         $this->_appState = $context->getAppState();
     }
 
-    private function createClient($storeId) {
-        // initialize client
-        $webserviceUsername = $this->_adyenHelper->getWsUsername($storeId);
-        $webservicePassword = $this->_adyenHelper->getWsPassword($storeId);
-
-        $client = new \Adyen\Client();
-        $client->setApplicationName("Magento 2 plugin");
-        $client->setUsername($webserviceUsername);
-        $client->setPassword($webservicePassword);
-
-        if ($this->_adyenHelper->isDemoMode($storeId)) {
-            $client->setEnvironment(\Adyen\Environment::TEST);
-        } else {
-            $client->setEnvironment(\Adyen\Environment::LIVE);
-        }
-
-        // assign magento log
-        $client->setLogger($this->_adyenLogger);
-
+    /**
+     * @param $storeId
+     * @return mixed
+     * @throws \Adyen\AdyenException
+     */
+    private function createClient($storeId)
+    {
+        $client = $this->_adyenHelper->initializeAdyenClient($storeId);
         return $client;
     }
 
@@ -110,28 +99,23 @@ class PaymentRequest extends DataObject
         $order = $payment->getOrder();
         $storeId = $order->getStoreId();
 
-        $this->_adyenHelper->setOrder($order);
-
-        $merchantAccount = $this->_adyenHelper->getAdyenAbstractConfigData("merchant_account", $storeId);
-        $shopperIp = $order->getRemoteIp();
-
         $md = $payment->getAdditionalInformation('md');
         $paResponse = $payment->getAdditionalInformation('paResponse');
+        $paymentData = $payment->getAdditionalInformation('paymentData');
 
-        $browserInfo = ['userAgent' => $_SERVER['HTTP_USER_AGENT'], 'acceptHeader' => $_SERVER['HTTP_ACCEPT']];
         $request = [
-            "merchantAccount" => $merchantAccount,
-            "browserInfo" => $browserInfo,
-            "md" => $md,
-            "paResponse" => $paResponse,
-            "shopperIP" => $shopperIp
+            "paymentData" => $paymentData,
+            "details" => [
+                "MD" => $md,
+                "PaRes" => $paResponse
+            ]
         ];
 
         try {
-            $client = $this->createClient($storeId);
-            $service = new \Adyen\Service\Payment($client);
-            $result = $service->authorise3D($request);
-        } catch(\Adyen\AdyenException $e) {
+            $client = $this->_adyenHelper->initializeAdyenClient($storeId);
+            $service = new \Adyen\Service\Checkout($client);
+            $result = $service->paymentsDetails($request);
+        } catch (\Adyen\AdyenException $e) {
             throw new \Magento\Framework\Exception\LocalizedException(__('3D secure failed'));
         }
 
@@ -150,7 +134,6 @@ class PaymentRequest extends DataObject
         $recurringTypes = $this->_recurringType->getAllowedRecurringTypesForListRecurringCall();
 
         foreach ($recurringTypes as $recurringType) {
-
             try {
                 // merge ONECLICK and RECURRING into one record with recurringType ONECLICK,RECURRING
                 $listRecurringContractByType =
@@ -198,8 +181,8 @@ class PaymentRequest extends DataObject
         // rest call to get list of recurring details
         $contract = ['contract' => $recurringType];
         $request = [
-            "merchantAccount"    => $this->_adyenHelper->getAdyenAbstractConfigData('merchant_account', $storeId),
-            "shopperReference"   => $shopperReference,
+            "merchantAccount" => $this->_adyenHelper->getAdyenAbstractConfigData('merchant_account', $storeId),
+            "shopperReference" => $shopperReference,
             "recurring" => $contract,
         ];
 
@@ -236,7 +219,7 @@ class PaymentRequest extends DataObject
 
         try {
             $result = $service->disable($request);
-        } catch(\Exception $e) {
+        } catch (\Exception $e) {
             $this->_adyenLogger->info($e->getMessage());
         }
 

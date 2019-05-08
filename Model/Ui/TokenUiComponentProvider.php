@@ -15,7 +15,7 @@
  *
  * Adyen Payment module (https://www.adyen.com/)
  *
- * Copyright (c) 2015 Adyen BV (https://www.adyen.com/)
+ * Copyright (c) 2019 Adyen BV (https://www.adyen.com/)
  * See LICENSE.txt for license details.
  *
  * Author: Adyen <magento@adyen.com>
@@ -28,7 +28,6 @@ use Magento\Vault\Api\Data\PaymentTokenInterface;
 use Magento\Vault\Model\Ui\TokenUiComponentInterface;
 use Magento\Vault\Model\Ui\TokenUiComponentProviderInterface;
 use Magento\Vault\Model\Ui\TokenUiComponentInterfaceFactory;
-use Magento\Framework\UrlInterface;
 
 /**
  * Class TokenUiComponentProvider
@@ -39,11 +38,6 @@ class TokenUiComponentProvider implements TokenUiComponentProviderInterface
      * @var TokenUiComponentInterfaceFactory
      */
     private $componentFactory;
-
-    /**
-     * @var \Magento\Framework\UrlInterface
-     */
-    private $urlBuilder;
 
     /**
      * @var Data
@@ -57,18 +51,15 @@ class TokenUiComponentProvider implements TokenUiComponentProviderInterface
 
     /**
      * @param TokenUiComponentInterfaceFactory $componentFactory
-     * @param UrlInterface $urlBuilder
      * @param Data $adyenHelper
      * @param \Magento\Checkout\Model\Session $checkoutSession
      */
     public function __construct(
         TokenUiComponentInterfaceFactory $componentFactory,
-        UrlInterface $urlBuilder,
         Data $adyenHelper,
         \Magento\Checkout\Model\Session $checkoutSession
     ) {
         $this->componentFactory = $componentFactory;
-        $this->urlBuilder = $urlBuilder;
         $this->adyenHelper = $adyenHelper;
         $this->checkoutSession = $checkoutSession;
 
@@ -85,7 +76,6 @@ class TokenUiComponentProvider implements TokenUiComponentProviderInterface
         $details = json_decode($paymentToken->getTokenDetails() ?: '{}', true);
         $details['icon'] = $this->adyenHelper->getVariantIcon($details['type']);
 
-        
         $component = $this->componentFactory->create(
             [
                 'config' => [

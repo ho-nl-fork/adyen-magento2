@@ -20,6 +20,7 @@
  *
  * Author: Adyen <magento@adyen.com>
  */
+
 namespace Adyen\Payment\Gateway\Request;
 
 use Magento\Payment\Gateway\Request\BuilderInterface;
@@ -30,7 +31,7 @@ class MerchantAccountDataBuilder implements BuilderInterface
      * @var \Adyen\Payment\Helper\Data
      */
     private $adyenHelper;
-    
+
     /**
      * RecurringDataBuilder constructor.
      *
@@ -52,8 +53,10 @@ class MerchantAccountDataBuilder implements BuilderInterface
         $paymentDataObject = \Magento\Payment\Gateway\Helper\SubjectReader::readPayment($buildSubject);
         $order = $paymentDataObject->getOrder();
         $storeId = $order->getStoreId();
+        $payment = $paymentDataObject->getPayment();
+        $method = $payment->getMethod();
 
-        $merchantAccount = $this->adyenHelper->getAdyenAbstractConfigData("merchant_account", $storeId);
+        $merchantAccount = $this->adyenHelper->getAdyenMerchantAccount($method, $storeId);
 
         return ["merchantAccount" => $merchantAccount];
     }

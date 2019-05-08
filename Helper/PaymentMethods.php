@@ -188,7 +188,7 @@ class PaymentMethods extends AbstractHelper
     protected function _fetchHppMethods($store, $country)
     {
         $skinCode = $this->_adyenHelper->getAdyenHppConfigData('skin_code');
-        $merchantAccount = $this->_adyenHelper->getAdyenAbstractConfigData('merchant_account');
+        $merchantAccount = $this->_adyenHelper->getAdyenAbstractConfigData('merchant_account', $store->getId());
 
         if (!$skinCode || !$merchantAccount) {
             return [];
@@ -423,14 +423,14 @@ class PaymentMethods extends AbstractHelper
     /**
      * @var array
      */
-    protected $_cacheParams = array(
+    protected $_cacheParams = [
         'currencyCode',
         'merchantReference',
         'skinCode',
         'merchantAccount',
         'countryCode',
         'shopperLocale',
-    );
+    ];
 
     /**
      * @param $requestParams

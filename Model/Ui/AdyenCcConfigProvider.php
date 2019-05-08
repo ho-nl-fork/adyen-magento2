@@ -24,9 +24,6 @@
 namespace Adyen\Payment\Model\Ui;
 
 use Magento\Checkout\Model\ConfigProviderInterface;
-use Magento\Payment\Helper\Data as PaymentHelper;
-use Magento\Framework\View\Asset\Source as Source;
-use \Magento\Payment\Gateway\Config\Config as Config;
 
 class AdyenCcConfigProvider implements ConfigProviderInterface
 {
@@ -68,6 +65,11 @@ class AdyenCcConfigProvider implements ConfigProviderInterface
     private $ccConfig;
 
     /**
+     * @var \Magento\Store\Model\StoreManagerInterface
+     */
+    private $storeManager;
+
+    /**
      * @var \Magento\Checkout\Model\Session
      */
     private $checkoutSession;
@@ -75,21 +77,23 @@ class AdyenCcConfigProvider implements ConfigProviderInterface
     /**
      * AdyenCcConfigProvider constructor.
      *
-     * @param PaymentHelper $paymentHelper
+     * @param \Magento\Payment\Helper\Data $paymentHelper
      * @param \Adyen\Payment\Helper\Data $adyenHelper
      * @param \Magento\Framework\App\RequestInterface $request
      * @param \Magento\Framework\UrlInterface $urlBuilder
-     * @param Source $assetSource
+     * @param \Magento\Framework\View\Asset\Source $assetSource
+     * @param \Magento\Store\Model\StoreManagerInterface $storeManager
      * @param \Magento\Payment\Model\CcConfig $ccConfig
+     * @param \Magento\Payment\Model\CcConfig $config
      * @param \Magento\Checkout\Model\Session $checkoutSession
-     * @internal param Config $config
      */
     public function __construct(
-        PaymentHelper $paymentHelper,
+        \Magento\Payment\Helper\Data $paymentHelper,
         \Adyen\Payment\Helper\Data $adyenHelper,
         \Magento\Framework\App\RequestInterface $request,
         \Magento\Framework\UrlInterface $urlBuilder,
-        Source $assetSource,
+        \Magento\Framework\View\Asset\Source $assetSource,
+        \Magento\Store\Model\StoreManagerInterface $storeManager,
         \Magento\Payment\Model\CcConfig $ccConfig,
         \Magento\Checkout\Model\Session $checkoutSession
     ) {
@@ -99,6 +103,7 @@ class AdyenCcConfigProvider implements ConfigProviderInterface
         $this->_urlBuilder = $urlBuilder;
         $this->_assetSource = $assetSource;
         $this->ccConfig = $ccConfig;
+        $this->storeManager = $storeManager;
         $this->checkoutSession = $checkoutSession;
 
         $this->_adyenHelper->setQuote($checkoutSession->getQuote());
@@ -116,7 +121,9 @@ class AdyenCcConfigProvider implements ConfigProviderInterface
                     'vaultCode' => self::CC_VAULT_CODE,
                     'isActive' => true,
                     'redirectUrl' => $this->_urlBuilder->getUrl(
-                        'adyen/process/validate3d/', ['_secure' => $this->_getRequest()->isSecure()])
+                        'adyen/process/validate3d/',
+                        ['_secure' => $this->_getRequest()->isSecure()]
+                    )
                 ]
             ]
         ];
@@ -126,7 +133,8 @@ class AdyenCcConfigProvider implements ConfigProviderInterface
         $config = array_merge_recursive($config, [
             'payment' => [
                 'ccform' => [
-                    'availableTypes' => [$methodCode => $this->getCcAvailableTypes($methodCode)],
+                    'availableTypes' => [$methodCode => $this->getCcAvailableTypes()],
+                    'availableTypesByAlt' => [$methodCode => $this->getCcAvailableTypesByAlt()],
                     'months' => [$methodCode => $this->getCcMonths()],
                     'years' => [$methodCode => $this->getCcYears()],
                     'hasVerification' => [$methodCode => $this->hasVerification($methodCode)],
@@ -135,16 +143,22 @@ class AdyenCcConfigProvider implements ConfigProviderInterface
             ]
         ]);
 
-        $recurringType = $this->_adyenHelper->getAdyenAbstractConfigData('recurring_type');
+        $enableOneclick = $this->_adyenHelper->getAdyenAbstractConfigData('enable_oneclick');
+
         $canCreateBillingAgreement = false;
-        if ($recurringType == "ONECLICK" || $recurringType == "ONECLICK,RECURRING") {
+        if ($enableOneclick) {
             $canCreateBillingAgreement = true;
         }
 
-        $config['payment'] ['adyenCc']['librarySource'] = $this->_adyenHelper->getLibrarySource();
-        $config['payment']['adyenCc']['generationTime'] = date("c");
+        $config['payment']['adyenCc']['methodCode'] = self::CODE;
+
+        $config['payment']['adyenCc']['locale'] = $this->_adyenHelper->getStoreLocale($this->storeManager->getStore()->getId());
+
         $config['payment']['adyenCc']['canCreateBillingAgreement'] = $canCreateBillingAgreement;
         $config['payment']['adyenCc']['icons'] = $this->getIcons();
+
+        $config['payment']['adyenCc']['originKey'] = $this->_adyenHelper->getOriginKeyForBaseUrl();
+        $config['payment']['adyenCc']['checkoutUrl'] = $this->_adyenHelper->getCheckoutContextUrl($this->storeManager->getStore()->getId());
 
         // has installments by default false
         $config['payment']['adyenCc']['hasInstallments'] = false;
@@ -166,10 +180,9 @@ class AdyenCcConfigProvider implements ConfigProviderInterface
     /**
      * Retrieve availables credit card types
      *
-     * @param string $methodCode
      * @return array
      */
-    protected function getCcAvailableTypes($methodCode)
+    protected function getCcAvailableTypes()
     {
         $types = [];
         $ccTypes = $this->_adyenHelper->getAdyenCcTypes();
@@ -179,6 +192,29 @@ class AdyenCcConfigProvider implements ConfigProviderInterface
             foreach (array_keys($ccTypes) as $code) {
                 if (in_array($code, $availableTypes)) {
                     $types[$code] = $ccTypes[$code]['name'];
+                }
+            }
+        }
+
+        return $types;
+    }
+
+    /**
+     * Retrieve availables credit card type codes by alt code
+     *
+     * @param string $methodCode
+     * @return array
+     */
+    protected function getCcAvailableTypesByAlt()
+    {
+        $types = [];
+        $ccTypes = $this->_adyenHelper->getAdyenCcTypes();
+        $availableTypes = $this->_adyenHelper->getAdyenCcConfigData('cctypes');
+        if ($availableTypes) {
+            $availableTypes = explode(',', $availableTypes);
+            foreach (array_keys($ccTypes) as $code) {
+                if (in_array($code, $availableTypes)) {
+                    $types[$ccTypes[$code]['code_alt']] = $code;
                 }
             }
         }

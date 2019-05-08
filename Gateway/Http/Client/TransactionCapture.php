@@ -55,25 +55,7 @@ class TransactionCapture implements ClientInterface
         $this->_recurringType = $recurringType;
         $this->_appState = $context->getAppState();
 
-        // initialize client
-        $webserviceUsername = $this->_adyenHelper->getWsUsername();
-        $webservicePassword = $this->_adyenHelper->getWsPassword();
-
-        $client = new \Adyen\Client();
-        $client->setApplicationName("Magento 2 plugin");
-        $client->setUsername($webserviceUsername);
-        $client->setPassword($webservicePassword);
-
-        if ($this->_adyenHelper->isDemoMode()) {
-            $client->setEnvironment(\Adyen\Environment::TEST);
-        } else {
-            $client->setEnvironment(\Adyen\Environment::LIVE);
-        }
-
-        // assign magento log
-        $client->setLogger($adyenLogger);
-
-        $this->_client = $client;
+        $this->_client = $this->_adyenHelper->initializeAdyenClient();
     }
 
     /**
@@ -89,7 +71,7 @@ class TransactionCapture implements ClientInterface
 
         try {
             $response = $service->capture($request);
-        } catch(\Adyen\AdyenException $e) {
+        } catch (\Adyen\AdyenException $e) {
             $this->_adyenLogger->error($e); // add this for now not in the lib yet
             $response = null;
         }

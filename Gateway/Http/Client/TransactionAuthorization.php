@@ -50,35 +50,15 @@ class TransactionAuthorization implements ClientInterface
         \Magento\Framework\Model\Context $context,
         \Magento\Framework\Encryption\EncryptorInterface $encryptor,
         \Adyen\Payment\Helper\Data $adyenHelper,
-        \Adyen\Payment\Logger\AdyenLogger $adyenLogger,
         \Adyen\Payment\Model\RecurringType $recurringType,
         array $data = []
     ) {
         $this->_encryptor = $encryptor;
         $this->_adyenHelper = $adyenHelper;
-        $this->_adyenLogger = $adyenLogger;
         $this->_recurringType = $recurringType;
         $this->_appState = $context->getAppState();
 
-        // initialize client
-        $webserviceUsername = $this->_adyenHelper->getWsUsername();
-        $webservicePassword = $this->_adyenHelper->getWsPassword();
-
-        $client = new \Adyen\Client();
-        $client->setApplicationName("Magento 2 plugin");
-        $client->setUsername($webserviceUsername);
-        $client->setPassword($webservicePassword);
-
-        if ($this->_adyenHelper->isDemoMode()) {
-            $client->setEnvironment(\Adyen\Environment::TEST);
-        } else {
-            $client->setEnvironment(\Adyen\Environment::LIVE);
-        }
-
-        // assign magento log
-        $client->setLogger($adyenLogger);
-
-        $this->_client = $client;
+        $this->_client = $this->_adyenHelper->initializeAdyenClient();
     }
     
     /**
@@ -95,7 +75,7 @@ class TransactionAuthorization implements ClientInterface
 
         try {
             $response = $service->authorise($request);
-        } catch(\Adyen\AdyenException $e) {
+        } catch (\Adyen\AdyenException $e) {
             $response['error'] =  $e->getMessage();
         }
         return $response;

@@ -15,7 +15,7 @@
  *
  * Adyen Payment module (https://www.adyen.com/)
  *
- * Copyright (c) 2015 Adyen BV (https://www.adyen.com/)
+ * Copyright (c) 2019 Adyen BV (https://www.adyen.com/)
  * See LICENSE.txt for license details.
  *
  * Author: Adyen <magento@adyen.com>
@@ -30,14 +30,12 @@ use Magento\Vault\Api\Data\PaymentTokenInterface;
 use Magento\Vault\Block\AbstractCardRenderer;
 use Magento\Payment\Model\CcConfigProvider;
 
-
 class CardRenderer extends AbstractCardRenderer
 {
-
     /**
      * @var Data
      */
-    protected $_adyenHelper;
+    protected $adyenHelper;
 
     public function __construct(
         Template\Context $context,
@@ -46,7 +44,7 @@ class CardRenderer extends AbstractCardRenderer
         Data $adyenHelper
     ) {
         parent::__construct($context, $iconsProvider, $data);
-        $this->_adyenHelper = $adyenHelper;
+        $this->adyenHelper = $adyenHelper;
     }
 
     /**
@@ -81,7 +79,7 @@ class CardRenderer extends AbstractCardRenderer
      */
     public function getIconUrl()
     {
-        return $this->_adyenHelper->getVariantIcon($this->getTokenDetails()['type'])['url'];
+        return $this->adyenHelper->getVariantIcon($this->getTokenDetails()['type'])['url'];
     }
 
     /**
@@ -89,7 +87,7 @@ class CardRenderer extends AbstractCardRenderer
      */
     public function getIconHeight()
     {
-        return $this->_adyenHelper->getVariantIcon($this->getTokenDetails()['type'])['height'];
+        return $this->adyenHelper->getVariantIcon($this->getTokenDetails()['type'])['height'];
     }
 
     /**
@@ -97,7 +95,6 @@ class CardRenderer extends AbstractCardRenderer
      */
     public function getIconWidth()
     {
-        return $this->_adyenHelper->getVariantIcon($this->getTokenDetails()['type'])['width'];
+        return $this->adyenHelper->getVariantIcon($this->getTokenDetails()['type'])['width'];
     }
-
 }

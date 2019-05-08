@@ -15,7 +15,7 @@
  *
  * Adyen Payment module (https://www.adyen.com/)
  *
- * Copyright (c) 2015 Adyen BV (https://www.adyen.com/)
+ * Copyright (c) 2019 Adyen BV (https://www.adyen.com/)
  * See LICENSE.txt for license details.
  *
  * Author: Adyen <magento@adyen.com>
@@ -30,12 +30,11 @@ class PaymentVaultDeleteToken
     /**
      * @var \Adyen\Payment\Model\Api\PaymentRequest
      */
-    protected $_paymentRequest;
-
+    protected $paymentRequest;
     /**
      * @var \Magento\Store\Model\StoreManagerInterface
      */
-    protected $_storeManager;
+    protected $storeManager;
 
     /**
      * PaymentVaultDeleteToken constructor.
@@ -45,23 +44,24 @@ class PaymentVaultDeleteToken
         \Adyen\Payment\Model\Api\PaymentRequest $paymentRequest,
         \Magento\Store\Model\StoreManagerInterface $storeManager
     ) {
-        $this->_paymentRequest = $paymentRequest;
-        $this->_storeManager = $storeManager;
+        $this->paymentRequest = $paymentRequest;
+        $this->storeManager = $storeManager;
     }
 
-    public function beforeDelete(\Magento\Vault\Api\PaymentTokenRepositoryInterface $subject, PaymentTokenInterface $paymentToken)
-    {
+    public function beforeDelete(
+        \Magento\Vault\Api\PaymentTokenRepositoryInterface $subject,
+        PaymentTokenInterface $paymentToken
+    ) {
         if (strpos($paymentToken->getPaymentMethodCode(), 'adyen_') !== 0) {
             return [$paymentToken];
         }
-
         try {
-            $this->_paymentRequest->disableRecurringContract(
+            $this->paymentRequest->disableRecurringContract(
                 $paymentToken->getGatewayToken(),
                 $paymentToken->getCustomerId(),
-                $this->_storeManager->getStore()->getStoreId()
+                $this->storeManager->getStore()->getStoreId()
             );
-        } catch(\Exception $e) {
+        } catch (\Exception $e) {
             throw new \Magento\Framework\Exception\LocalizedException(__('Failed to disable this contract'));
         }
     }

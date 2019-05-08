@@ -47,7 +47,7 @@ class AddressDataBuilder implements BuilderInterface
     
     /**
      * Add delivery\billing details into request
-     * 
+     *
      * @param array $buildSubject
      * @return array
      */
@@ -61,23 +61,39 @@ class AddressDataBuilder implements BuilderInterface
 
         $billingAddress = $order->getBillingAddress();
         if ($billingAddress) {
-
-            // filter housenumber from streetLine1
-            $requestBilling = ["street" => $billingAddress->getStreetLine1(),
-                "postalCode" => $billingAddress->getPostcode(),
-                "city" => $billingAddress->getCity(),
+            $requestBilling = ["street" => "N/A",
+                "postalCode" => '',
+                "city" => "N/A",
                 "houseNumberOrName" => '',
-                "stateOrProvince" => $billingAddress->getRegionCode(),
-                "country" => $billingAddress->getCountryId()
+                "stateOrProvince" => '',
+                "country" => "ZZ"
             ];
 
+            if ($billingAddress->getStreetLine1()) {
+                $requestBilling["street"] = $billingAddress->getStreetLine1();
+            }
+
+            if ($billingAddress->getPostcode()) {
+                $requestBilling["postalCode"] = $billingAddress->getPostcode();
+            }
+
+            if ($billingAddress->getCity()) {
+                $requestBilling["city"] = $billingAddress->getCity();
+            }
+
+            if ($billingAddress->getRegionCode()) {
+                $requestBilling["stateOrProvince"] = $billingAddress->getRegionCode();
+            }
+
+            if ($billingAddress->getCountryId()) {
+                $requestBilling["country"] = $billingAddress->getCountryId();
+            }
 
             $result['billingAddress'] = $requestBilling;
         }
         
         $shippingAddress = $order->getShippingAddress();
         if ($shippingAddress) {
-            
             // filter housenumber from streetLine1
             $requestDelivery = ["street" => $shippingAddress->getStreetLine1(),
                 "postalCode" => $shippingAddress->getPostcode(),
