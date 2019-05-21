@@ -56,7 +56,7 @@ class Oneclick extends \Adyen\Payment\Block\Form\Cc
         parent::__construct($context, $paymentConfig, $adyenHelper, $checkoutSession, $sessionQuote, $data);
         $this->_sessionQuote = $sessionQuote;
 
-        $this->_adyenHelper->setQuote($sessionQuote->getQuote());
+        $this->adyenHelper->setQuote($sessionQuote->getQuote());
     }
 
     /**
