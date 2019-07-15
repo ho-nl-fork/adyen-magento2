@@ -31,20 +31,22 @@ use Magento\Payment\Gateway\Request\BuilderInterface;
 class AddressDataBuilder implements BuilderInterface
 {
     /**
-     * @var \Adyen\Payment\Helper\Data
+     * @var \Adyen\Payment\Helper\Requests
      */
-    private $adyenHelper;
+    private $adyenRequestsHelper;
 
     /**
      * AddressDataBuilder constructor.
      *
-     * @param \Adyen\Payment\Helper\Data $adyenHelper
+     * @param \Adyen\Payment\Helper\Requests $adyenRequestsHelper
      */
-    public function __construct(\Adyen\Payment\Helper\Data $adyenHelper)
+    public function __construct(
+        \Adyen\Payment\Helper\Requests $adyenRequestsHelper
+	)
     {
-        $this->adyenHelper = $adyenHelper;
+        $this->adyenRequestsHelper = $adyenRequestsHelper;
     }
-    
+
     /**
      * Add delivery\billing details into request
      *
@@ -56,57 +58,9 @@ class AddressDataBuilder implements BuilderInterface
         /** @var \Magento\Payment\Gateway\Data\PaymentDataObject $paymentDataObject */
         $paymentDataObject = \Magento\Payment\Gateway\Helper\SubjectReader::readPayment($buildSubject);
         $order = $paymentDataObject->getOrder();
-
-        $result = [];
-
-        $billingAddress = $order->getBillingAddress();
-        if ($billingAddress) {
-            $requestBilling = ["street" => "N/A",
-                "postalCode" => '',
-                "city" => "N/A",
-                "houseNumberOrName" => '',
-                "stateOrProvince" => '',
-                "country" => "ZZ"
-            ];
-
-            if ($billingAddress->getStreetLine1()) {
-                $requestBilling["street"] = $billingAddress->getStreetLine1();
-            }
-
-            if ($billingAddress->getPostcode()) {
-                $requestBilling["postalCode"] = $billingAddress->getPostcode();
-            }
-
-            if ($billingAddress->getCity()) {
-                $requestBilling["city"] = $billingAddress->getCity();
-            }
-
-            if ($billingAddress->getRegionCode()) {
-                $requestBilling["stateOrProvince"] = $billingAddress->getRegionCode();
-            }
-
-            if ($billingAddress->getCountryId()) {
-                $requestBilling["country"] = $billingAddress->getCountryId();
-            }
-
-            $result['billingAddress'] = $requestBilling;
-        }
-        
+		$billingAddress = $order->getBillingAddress();
         $shippingAddress = $order->getShippingAddress();
-        if ($shippingAddress) {
-            // filter housenumber from streetLine1
-            $requestDelivery = ["street" => $shippingAddress->getStreetLine1(),
-                "postalCode" => $shippingAddress->getPostcode(),
-                "city" => $shippingAddress->getCity(),
-                "houseNumberOrName" => '',
-                "stateOrProvince" => $shippingAddress->getRegionCode(),
-                "country" => $shippingAddress->getCountryId()
-            ];
 
-
-            $result['deliveryAddress'] = $requestDelivery;
-        }
-
-        return $result;
+		return $this->adyenRequestsHelper->buildAddressData([], $billingAddress, $shippingAddress);
     }
 }

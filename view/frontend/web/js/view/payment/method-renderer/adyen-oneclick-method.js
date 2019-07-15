@@ -32,10 +32,16 @@ define(
         'Magento_Checkout/js/action/redirect-on-success',
         'uiLayout',
         'Magento_Ui/js/model/messages',
+        'mage/url',
+        'Adyen_Payment/js/threeds2-js-utils',
+        'Magento_Checkout/js/model/full-screen-loader',
+        'Magento_Paypal/js/action/set-payment-method',
+        'Magento_Checkout/js/model/url-builder',
+        'mage/storage',
         'Magento_Checkout/js/action/place-order',
-        'mage/url'
+        'Adyen_Payment/js/model/threeds2'
     ],
-    function (ko, _, $, Component, selectPaymentMethodAction, additionalValidators, quote, checkoutData, redirectOnSuccessAction, layout, Messages, placeOrderAction, url) {
+    function (ko, _, $, Component, selectPaymentMethodAction, additionalValidators, quote, checkoutData, redirectOnSuccessAction, layout, Messages, url, threeDS2Utils, fullScreenLoader, setPaymentMethodAction, urlBuilder, storage, placeOrderAction, threeds2) {
 
         'use strict';
 
@@ -59,7 +65,7 @@ define(
                     .observe([
                         'recurringDetailReference',
                         'creditCardType',
-                        'creditCardVerificationNumber',
+                        'encryptedCreditCardVerificationNumber',
                         'variant',
                         'numberOfInstallments'
                     ]);
@@ -99,6 +105,16 @@ define(
              */
             getAdyenBillingAgreements: function () {
                 var self = this;
+
+                // shareable adyen checkout component
+                var checkout = new AdyenCheckout({
+                    locale: self.getLocale(),
+                    originKey: self.getOriginKey(),
+                    loadingContext: self.getLoadingContext(),
+                    risk: {
+                        enabled: false
+                    }
+                });
 
                 // convert to list so you can iterate
                 var paymentList = _.map(window.checkoutConfig.payment.adyenOneclick.billingAgreements, function (value) {
@@ -158,7 +174,13 @@ define(
                             return self.isActive() && this.getCode() == self.isChecked() && self.isBillingAgreementChecked() && this.placeOrderAllowed();
                         },
                         /**
+                         * Custom place order function
+                         *
                          * @override
+                         *
+                         * @param data
+                         * @param event
+                         * @returns {boolean}
                          */
                         placeOrder: function (data, event) {
                             var self = this;
@@ -166,38 +188,31 @@ define(
                             if (event) {
                                 event.preventDefault();
                             }
-
                             // only use installments for cards
                             if (self.agreement_data.card) {
                                 if (self.hasVerification()) {
                                     var options = {enableValidations: false};
                                 }
-
-                                // set payment method to adyen_hpp
-                                // TODO can observer in front-end this not needed
                                 numberOfInstallments(self.installment);
                             }
 
-                            // in different context so need custom place order logic
                             if (this.validate() && additionalValidators.validate()) {
+                                fullScreenLoader.startLoader();
                                 self.isPlaceOrderActionAllowed(false);
 
-                                this.getPlaceOrderDeferredObject()
-                                    .fail(
-                                        function () {
-                                            self.isPlaceOrderActionAllowed(true);
-                                        }
-                                    ).done(
-                                    function () {
-                                        self.afterPlaceOrder();
-                                        // use custom redirect Link for supporting 3D secure
-                                        window.location.replace(url.build(window.checkoutConfig.payment[quote.paymentMethod().method].redirectUrl));
-                                    }
-                                );
-                                return true;
+                                threeds2.processPayment(this.getCcData()).done(function (responseJSON) {
+                                    self.validateThreeDS2OrPlaceOrder(responseJSON);
+                                }).error(function () {
+                                    fullScreenLoader.stopLoader();
+                                    self.isPlaceOrderActionAllowed(true);
+                                });
+
+                                return false;
                             }
+
                             return false;
                         },
+
                         /**
                          * Renders the secure CVC field,
                          * creates the card component,
@@ -211,17 +226,10 @@ define(
                             }
                             var oneClickCardNode = document.getElementById('cvcContainer-' + self.value);
 
-                            var checkout = new AdyenCheckout({
-                                locale: self.getLocale()
-                            });
-
                             // this should be fixed in new version of checkout card component
                             var hideCVC = false;
                             if (this.hasVerification()) {
-                                if (self.agreement_data.variant == "bcmc") {
-                                    hideCVC = true;
-                                    self.placeOrderAllowed(true);
-                                } else if (self.agreement_data.variant == "maestro") {
+                                if (self.agreement_data.variant == "maestro") {
                                     // for maestro cvc is optional
                                     self.placeOrderAllowed(true);
                                 }
@@ -231,19 +239,9 @@ define(
 
                             var oneClickCard = checkout
                                 .create('card', {
-                                    originKey: self.getOriginKey(),
-                                    loadingContext: self.getLoadingContext(),
                                     type: self.agreement_data.variant,
-                                    oneClick: true,
                                     hideCVC: hideCVC,
-
-                                    // Specific for oneClick cards
-                                    details: [
-                                        {
-                                            "key": "cardDetails.cvc",
-                                            "type": "cvc"
-                                        }
-                                    ],
+                                    details: self.getOneclickDetails(),
                                     storedDetails: {
                                         "card": {
                                             "expiryMonth": self.agreement_data.card.expiryMonth,
@@ -252,8 +250,11 @@ define(
                                             "number": self.agreement_data.card.number
                                         }
                                     },
-                                    onChange: function (state) {
+                                    onChange: function (state, component) {
                                         if (state.isValid) {
+                                            self.placeOrderAllowed(true);
+                                            isValid(true);
+
                                             if (typeof state.data !== 'undefined' &&
                                                 typeof state.data.encryptedSecurityCode !== 'undefined'
                                             ) {
@@ -261,32 +262,164 @@ define(
                                             }
                                         } else {
                                             self.encryptedCreditCardVerificationNumber = '';
-                                            // onChange is called on the startup so make sure maestro has always optional cvc field
+
                                             if (self.agreement_data.variant != "maestro") {
                                                 self.placeOrderAllowed(false);
                                                 isValid(false);
                                             }
                                         }
-                                    },
-                                    onValid: function (state) {
-                                        if (state.isValid) {
-                                            self.placeOrderAllowed(true);
-                                            isValid(true);
-                                        } else {
+
+                                        // When we move to the component v2.2 it should be removed
+                                        if (self.agreement_data.variant == "maestro" &&
+                                            component.state.errors.encryptedSecurityCode
+                                        ) {
+                                            self.placeOrderAllowed(false);
                                             isValid(false);
                                         }
-                                        return;
-                                    },
-                                    onError: function (data) {
-                                        self.placeOrderAllowed(false);
-                                        isValid(false);
-                                        return;
                                     }
                                 })
                                 .mount(oneClickCardNode);
 
 
                             window.adyencheckout = oneClickCard;
+                        },
+                        /**
+                         * Builds the payment details part of the payment information reqeust
+                         *
+                         * @returns {{method: *, additional_data: {card_brand: *, cc_type: *, number: *, cvc: *, expiryMonth: *, expiryYear: *, holderName: *, store_cc: (boolean|*), number_of_installments: *, java_enabled: boolean, screen_color_depth: number, screen_width, screen_height, timezone_offset: *}}}
+                         */
+                        getCcData: function () {
+                            var self = this;
+                            var browserInfo = threeDS2Utils.getBrowserInfo();
+                            var data = {
+                                'method': self.method,
+                                additional_data: {
+                                    'variant': variant(),
+                                    'recurring_detail_reference': recurringDetailReference(),
+                                    'store_cc': true,
+                                    'number_of_installments': numberOfInstallments(),
+                                    'cvc': self.encryptedCreditCardVerificationNumber,
+                                    'java_enabled': browserInfo.javaEnabled,
+                                    'screen_color_depth': browserInfo.colorDepth,
+                                    'screen_width': browserInfo.screenWidth,
+                                    'screen_height': browserInfo.screenHeight,
+                                    'timezone_offset': browserInfo.timeZoneOffset,
+                                    'language': browserInfo.language
+                                }
+                            };
+                            return data;
+                        },
+                        /**
+                         * Based on the response we can start a 3DS2 validation or place the order
+                         * @param responseJSON
+                         */
+                        validateThreeDS2OrPlaceOrder: function (responseJSON) {
+                            var self = this;
+                            var response = JSON.parse(responseJSON);
+
+                            if (!!response.threeDS2) {
+                                // render component
+                                self.renderThreeDS2Component(response.type, response.token);
+                            } else {
+                                this.getPlaceOrderDeferredObject()
+                                    .fail(
+                                        function () {
+                                            self.isPlaceOrderActionAllowed(true);
+                                        }
+                                    ).done(
+                                    function () {
+                                        self.afterPlaceOrder();
+                                        window.location.replace(url.build(window.checkoutConfig.payment[quote.paymentMethod().method].redirectUrl));
+                                    }
+                                );
+                            }
+                        },
+                        /**
+                         * Rendering the 3DS2.0 components
+                         * To do the device fingerprint at the response of IdentifyShopper render the threeDS2DeviceFingerprint
+                         * component
+                         * To render the challenge for the customer at the response of ChallengeShopper render the
+                         * threeDS2Challenge component
+                         * Both of them is going to be rendered in a Magento dialog popup
+                         *
+                         * @param type
+                         * @param token
+                         */
+                        renderThreeDS2Component: function (type, token) {
+                            var self = this;
+
+                            var threeDS2Node = document.getElementById('threeDS2ContainerOneClick');
+
+                            if (type == "IdentifyShopper") {
+                                self.threeDS2Component = checkout.create('threeDS2DeviceFingerprint', {
+                                    fingerprintToken: token,
+                                    onComplete: function (result) {
+                                        threeds2.processThreeDS2(result.data).done(function (responseJSON) {
+                                            self.validateThreeDS2OrPlaceOrder(responseJSON)
+                                        }).error(function () {
+                                            self.isPlaceOrderActionAllowed(true);
+                                            fullScreenLoader.stopLoader();
+                                        });
+                                    },
+                                    onError: function (error) {
+                                        console.log(JSON.stringify(error));
+                                    }
+                                });
+                            } else if (type == "ChallengeShopper") {
+                                fullScreenLoader.stopLoader();
+
+
+                                var popupModal = $('#threeDS2ModalOneClick').modal({
+                                    // disable user to hide popup
+                                    clickableOverlay: false,
+                                    // empty buttons, we don't need that
+                                    buttons: [],
+                                    modalClass: 'threeDS2Modal'
+                                });
+
+                                popupModal.modal("openModal");
+
+                                self.threeDS2Component = checkout
+                                    .create('threeDS2Challenge', {
+                                        challengeToken: token,
+                                        onComplete: function (result) {
+                                            popupModal.modal("closeModal");
+                                            fullScreenLoader.startLoader();
+                                            threeds2.processThreeDS2(result.data).done(function (responseJSON) {
+                                                self.validateThreeDS2OrPlaceOrder(responseJSON)
+                                            }).error(function () {
+                                                self.isPlaceOrderActionAllowed(true);
+                                                fullScreenLoader.stopLoader();
+                                            });
+                                        },
+                                        onError: function (error) {
+                                            console.log(JSON.stringify(error));
+                                        }
+                                    });
+                            }
+
+                            self.threeDS2Component.mount(threeDS2Node);
+                        },
+                        /**
+                         * We use the billingAgreements to save the oneClick stored payments but we don't store the
+                         * details object that we get from the paymentMethods call. This function is a fix for BCMC.
+                         * When we render the stored payments dynamically from the paymentMethods call response it
+                         * should be removed
+                         * @returns {*}
+                         */
+                        getOneclickDetails: function () {
+                            var self = this;
+
+                            if (self.agreement_data.variant === 'bcmc') {
+                                return [];
+                            } else {
+                                return [
+                                    {
+                                        "key": "cardDetails.cvc",
+                                        "type": "cvc"
+                                    }
+                                ];
+                            }
                         },
                         /**
                          * Builds the payment details part of the payment information reqeust
@@ -302,9 +435,7 @@ define(
                                     variant: variant(),
                                     recurring_detail_reference: recurringDetailReference(),
                                     number_of_installments: numberOfInstallments(),
-                                    cvc: self.encryptedCreditCardVerificationNumber,
-                                    expiryMonth: self.creditCardExpMonth(),
-                                    expiryYear: self.creditCardExpYear()
+                                    cvc: self.encryptedCreditCardVerificationNumber
                                 }
                             };
                         },
@@ -328,15 +459,6 @@ define(
                         getCode: function () {
                             return self.item.method;
                         },
-                        getLocale: function () {
-                            return window.checkoutConfig.payment.adyenOneclick.locale;
-                        },
-                        getOriginKey: function () {
-                            return window.checkoutConfig.payment.adyenOneclick.originKey;
-                        },
-                        getLoadingContext: function () {
-                            return window.checkoutConfig.payment.adyenOneclick.checkoutUrl;
-                        },
                         hasVerification: function () {
                             return self.hasVerification()
                         },
@@ -345,6 +467,9 @@ define(
                         },
                         getMessageContainer: function () {
                             return messageContainer;
+                        },
+                        getOriginKey: function () {
+                            return self.getOriginKey();
                         },
                         isPlaceOrderActionAllowed: function () {
                             return self.isPlaceOrderActionAllowed(); // needed for placeOrder method
@@ -434,6 +559,15 @@ define(
             },
             hasVerification: function () {
                 return window.checkoutConfig.payment.adyenOneclick.hasCustomerInteraction;
+            },
+            getLocale: function () {
+                return window.checkoutConfig.payment.adyenOneclick.locale;
+            },
+            getOriginKey: function () {
+                return window.checkoutConfig.payment.adyenOneclick.originKey;
+            },
+            getLoadingContext: function () {
+                return window.checkoutConfig.payment.adyenOneclick.checkoutUrl;
             }
         });
     }

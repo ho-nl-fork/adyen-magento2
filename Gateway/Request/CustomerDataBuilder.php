@@ -29,8 +29,24 @@ use Magento\Payment\Gateway\Request\BuilderInterface;
  */
 class CustomerDataBuilder implements BuilderInterface
 {
+    /**
+     * @var \Adyen\Payment\Helper\Requests
+     */
+    private $adyenRequestsHelper;
 
     /**
+     * CustomerDataBuilder constructor.
+     *
+     * @param \Adyen\Payment\Helper\Requests $adyenRequestsHelper
+     */
+	public function __construct(
+        \Adyen\Payment\Helper\Requests $adyenRequestsHelper
+	)
+	{
+        $this->adyenRequestsHelper = $adyenRequestsHelper;
+	}
+
+	/**
      * Add shopper data into request
      *
      * @param array $buildSubject
@@ -38,31 +54,14 @@ class CustomerDataBuilder implements BuilderInterface
      */
     public function build(array $buildSubject)
     {
-        $result = [];
-
         /** @var \Magento\Payment\Gateway\Data\PaymentDataObject $paymentDataObject */
         $paymentDataObject = \Magento\Payment\Gateway\Helper\SubjectReader::readPayment($buildSubject);
         $order = $paymentDataObject->getOrder();
+        $payment = $paymentDataObject->getPayment();
         $customerId = $order->getCustomerId();
+        $billingAddress = $order->getBillingAddress();
+        $storeId = $order->getStoreId();
 
-        if ($customerId > 0) {
-            $result['shopperReference'] = $customerId;
-        }
-
-		$billingAddress = $order->getBillingAddress();
-
-        if (!empty($billingAddress)) {
-			$customerEmail = $billingAddress->getEmail();
-			if ($customerEmail) {
-				$result['shopperEmail'] = $customerEmail;
-			}
-
-			$customerTelephone = trim($billingAddress->getTelephone());
-			if ($customerTelephone) {
-				$result['telephoneNumber'] = $customerTelephone;
-			}
-		}
-
-        return $result;
+        return $this->adyenRequestsHelper->buildCustomerData([], $customerId, $billingAddress, $storeId, $payment);
     }
 }

@@ -33,6 +33,7 @@ class CheckoutPaymentsDetailsHandler implements HandlerInterface
      */
     protected $adyenHelper;
 
+
     public function __construct(
         \Adyen\Payment\Helper\Data $adyenHelper
     ) {
@@ -40,15 +41,16 @@ class CheckoutPaymentsDetailsHandler implements HandlerInterface
     }
 
     /**
+     * This is being used for all checkout methods (adyen hpp payment method)
+     *
      * @param array $handlingSubject
      * @param array $response
      */
     public function handle(array $handlingSubject, array $response)
     {
-        $payment = \Magento\Payment\Gateway\Helper\SubjectReader::readPayment($handlingSubject);
+        $paymentDataObject = \Magento\Payment\Gateway\Helper\SubjectReader::readPayment($handlingSubject);
 
-        /** @var OrderPaymentInterface $payment */
-        $payment = $payment->getPayment();
+        $payment = $paymentDataObject->getPayment();
 
         // set transaction not to processing by default wait for notification
         $payment->setIsTransactionPending(true);
@@ -66,10 +68,10 @@ class CheckoutPaymentsDetailsHandler implements HandlerInterface
         }
 
         if (!empty($response['additionalData']['recurring.recurringDetailReference']) &&
-            !$this->adyenHelper->isCreditCardVaultEnabled()
+            !$this->adyenHelper->isCreditCardVaultEnabled() &&
+            $payment->getMethodInstance()->getCode() !== \Adyen\Payment\Model\Ui\AdyenOneclickConfigProvider::CODE
         ) {
             $order = $payment->getOrder();
-
             $this->adyenHelper->createAdyenBillingAgreement($order, $response['additionalData']);
         }
 
