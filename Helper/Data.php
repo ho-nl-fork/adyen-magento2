@@ -823,20 +823,24 @@ class Data extends AbstractHelper
         $quote = $this->getQuote();
         $order = $this->getOrder();
         if (!$flag) {
-            if ($quote) {
+            if ($order) {
+                return $field === 'merchant_account' && $order->getData('adyen_merchant_account') !== null
+                    ? $order->getData('adyen_merchant_account')
+                    : $this->orderConfigProviderFactory->get($order)->getValue($path, \Magento\Store\Model\ScopeInterface::SCOPE_STORE, $order->getStoreId());
+            } elseif ($quote) {
                 return $this->quoteConfigProviderFactory->get($quote)->getValue($path, \Magento\Store\Model\ScopeInterface::SCOPE_STORE, $quote->getStoreId());
             }
-            elseif ($order) {
-                return $this->orderConfigProviderFactory->get($order)->getValue($path, \Magento\Store\Model\ScopeInterface::SCOPE_STORE, $order->getStoreId());
-            }
+
             return $this->scopeConfig->getValue($path, \Magento\Store\Model\ScopeInterface::SCOPE_STORE, $storeId);
         } else {
-            if ($quote) {
+            if ($order) {
+                return $field === 'merchant_account' && $order->getData('adyen_merchant_account') !== null
+                    ? $order->getData('adyen_merchant_account')
+                    : $this->orderConfigProviderFactory->get($order)->isSetFlag($path, \Magento\Store\Model\ScopeInterface::SCOPE_STORE, $order->getStoreId());
+            } elseif ($quote) {
                 return $this->quoteConfigProviderFactory->get($quote)->isSetFlag($path, \Magento\Store\Model\ScopeInterface::SCOPE_STORE, $quote->getStoreId());
             }
-            elseif ($order) {
-                return $this->orderConfigProviderFactory->get($order)->isSetFlag($path, \Magento\Store\Model\ScopeInterface::SCOPE_STORE, $order->getStoreId());
-            }
+
             return $this->scopeConfig->isSetFlag($path, \Magento\Store\Model\ScopeInterface::SCOPE_STORE, $storeId);
         }
     }
