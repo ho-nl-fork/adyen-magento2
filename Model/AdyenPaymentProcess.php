@@ -118,6 +118,7 @@ class AdyenPaymentProcess implements AdyenPaymentProcessInterface
 
         // Get payment and cart information from session
         $quote = $this->checkoutSession->getQuote();
+        $this->adyenHelper->setQuote($quote);
         $payment = $quote->getPayment();
 
         // Init request array

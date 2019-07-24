@@ -40,18 +40,33 @@ class PayByMailCommand implements CommandInterface
     protected $_adyenLogger;
 
     /**
+     * @var \ReachDigital\Subscription\Model\Subscription\SubscriptionCollection
+     */
+    private $subscriptionCollection;
+
+    /**
+     * @var \Magento\Sales\Api\OrderRepositoryInterface
+     */
+    private $orderRepository;
+
+    /**
      * PayByMailCommand constructor.
      *
      * @param \Adyen\Payment\Helper\Data $adyenHelper
-     * @param \Magento\Framework\Locale\ResolverInterface $resolver
      * @param \Adyen\Payment\Logger\AdyenLogger $adyenLogger
+     * @param \ReachDigital\Subscription\Model\Subscription\SubscriptionCollection $subscriptionCollection
+     * @param \Magento\Sales\Api\OrderRepositoryInterface $orderRepository
      */
     public function __construct(
         \Adyen\Payment\Helper\Data $adyenHelper,
-        \Adyen\Payment\Logger\AdyenLogger $adyenLogger
+        \Adyen\Payment\Logger\AdyenLogger $adyenLogger,
+        \ReachDigital\Subscription\Model\Subscription\SubscriptionCollection $subscriptionCollection,
+        \Magento\Sales\Api\OrderRepositoryInterface $orderRepository
     ) {
         $this->_adyenHelper = $adyenHelper;
         $this->_adyenLogger = $adyenLogger;
+        $this->subscriptionCollection = $subscriptionCollection;
+        $this->orderRepository = $orderRepository;
     }
 
     /**
@@ -87,7 +102,16 @@ class PayByMailCommand implements CommandInterface
      */
     public function generatePaymentUrl($payment, $paymentAmount = false)
     {
-        $this->_adyenHelper->setOrder($payment->getOrder());
+        $order = $payment->getOrder();
+
+        if ($subscriptionId = $order->getData('subscription_id')) {
+            $subscription = $this->subscriptionCollection->get(
+                \ReachDigital\Subscription\Model\Subscription\SubscriptionId::fromString($subscriptionId)
+            );
+            $order = $this->orderRepository->get($subscription->originalOrderId()->toScalar());
+        }
+
+        $this->_adyenHelper->setOrder($order);
 
         $url = $this->getFormUrl();
         $fields = $this->getFormFields($payment, $paymentAmount);
