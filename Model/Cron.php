@@ -1649,11 +1649,12 @@ class Cron
                     ->save();
 
                 $this->_adyenLogger->addAdyenNotificationCronjob('Created invoice entry in the Adyen table');
-            } catch (Exception $e) {
+            } catch (\Throwable $e) {
                 $this->_adyenLogger->addAdyenNotificationCronjob(
                     'Error saving invoice. The error message is: ' . $e->getMessage()
                 );
-                throw new Exception(sprintf('Error saving invoice. The error message is:', $e->getMessage()));
+                $this->_adyenLogger->addAdyenNotificationCronjob($e);
+                throw $e;
             }
 
             $this->_setPaymentAuthorized();
