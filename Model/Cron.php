@@ -1338,15 +1338,26 @@ class Cron
 
         // add to order payment
         $date = new \DateTime();
-        $this->_adyenOrderPaymentFactory->create()
+
+        /** @var Order\Payment $orderPayment */
+        $orderPayment = $this->_adyenOrderPaymentCollectionFactory
+            ->create()
+            ->addFieldToFilter(\Adyen\Payment\Model\Notification::PSPREFRENCE, $this->_pspReference)
+            ->getFirstItem();
+        if (!$orderPayment->getEntityId()) {
+            $orderPayment = $this->_adyenOrderPaymentFactory->create();
+            $orderPayment->setCreatedAt($date);
+            $orderPayment->setUpdatedAt($date);
+        } else {
+            $orderPayment->setUpdatedAt($date);
+        }
+        $orderPayment
             ->setPspreference($this->_pspReference)
             ->setMerchantReference($this->_merchantReference)
             ->setPaymentId($paymentObj->getId())
             ->setPaymentMethod($this->_paymentMethod)
             ->setAmount($amount)
             ->setTotalRefunded(0)
-            ->setCreatedAt($date)
-            ->setUpdatedAt($date)
             ->save();
 
 
@@ -1649,11 +1660,12 @@ class Cron
                     ->save();
 
                 $this->_adyenLogger->addAdyenNotificationCronjob('Created invoice entry in the Adyen table');
-            } catch (Exception $e) {
+            } catch (\Throwable $e) {
                 $this->_adyenLogger->addAdyenNotificationCronjob(
                     'Error saving invoice. The error message is: ' . $e->getMessage()
                 );
-                throw new Exception(sprintf('Error saving invoice. The error message is:', $e->getMessage()));
+                $this->_adyenLogger->addAdyenNotificationCronjob($e);
+                throw $e;
             }
 
             $this->_setPaymentAuthorized();
