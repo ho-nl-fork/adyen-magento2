@@ -945,4 +945,8 @@
     <type name="Magento\Vault\Api\PaymentTokenRepositoryInterface">
         <plugin name="AdyenPaymentVaultDeleteToken" type="Adyen\Payment\Plugin\PaymentVaultDeleteToken" sortOrder="10"/>
     </type>
+
+    <type name="Magento\Vault\Model\Method\Vault">
+        <plugin name="AdyenInitializeHppVault" type="Adyen\Payment\Plugin\InitializeHppVault"/>
+    </type>
 </config>

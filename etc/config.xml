@@ -122,7 +122,7 @@
             <adyen_hpp_vault>
                 <active>1</active>
                 <model>AdyenPaymentHppVaultFacade</model>
-                <title>Recurring SEPA Contracts (Adyen)</title>
+                <title>SEPA Recurring Contracts (Adyen)</title>
                 <instant_purchase>
                     <available>Adyen\Payment\Model\InstantPurchase\CreditCard\AvailabilityChecker</available>
                     <tokenFormat>Adyen\Payment\Model\InstantPurchase\CreditCard\TokenFormatter</tokenFormat>
