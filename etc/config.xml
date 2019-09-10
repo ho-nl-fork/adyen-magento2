@@ -116,7 +116,19 @@
                 <can_void>1</can_void>
                 <can_cancel>1</can_cancel>
                 <group>adyen</group>
+                <can_authorize_vault>1</can_authorize_vault>
+                <can_capture_vault>1</can_capture_vault>
             </adyen_hpp>
+            <adyen_hpp_vault>
+                <active>1</active>
+                <model>AdyenPaymentHppVaultFacade</model>
+                <title>Recurring SEPA Contracts (Adyen)</title>
+                <instant_purchase>
+                    <available>Adyen\Payment\Model\InstantPurchase\CreditCard\AvailabilityChecker</available>
+                    <tokenFormat>Adyen\Payment\Model\InstantPurchase\CreditCard\TokenFormatter</tokenFormat>
+                </instant_purchase>
+                <can_use_internal>1</can_use_internal>
+            </adyen_hpp_vault>
             <adyen_pos_cloud>
                 <active>0</active>
                 <model>AdyenPaymentPosCloudFacade</model>
