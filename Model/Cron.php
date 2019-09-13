@@ -1031,7 +1031,9 @@ class Cron
                 // These will only be available once, right after creating the initial payment which creates the SEPA details.
                 // After this, recurring contract notifications with payment method 'sepadirectdebit' will be returned,
                 // no need to process those.
-                if (in_array($this->_paymentMethod, ['ideal', 'directEbanking'])) {
+                if ($this->_adyenHelper->isCreditCardVaultEnabled()
+                    && in_array($this->_paymentMethod, ['ideal', 'directEbanking'])
+                ) {
                     $customerId = $this->_order->getCustomerId();
 
                     $notifications = $this->_notificationFactory->create();
@@ -1051,7 +1053,8 @@ class Cron
                     $paymentToken->setGatewayToken($this->_pspReference);
                     $paymentToken->setCustomerId($customerId);
                     $paymentToken->setIsActive(true);
-                    $paymentToken->setPaymentMethodCode($this->_paymentMethod);
+                    $paymentToken->setPaymentMethodCode('adyen_hpp');
+                    $paymentToken->setHppPaymentMethodCode($this->_paymentMethod);
                     $paymentToken->setTokenDetails(json_encode(unserialize($parentNotification->getAdditionalData())));
                     $paymentToken->setIsVisible(true);
 

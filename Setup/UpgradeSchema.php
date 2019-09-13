@@ -68,6 +68,10 @@ class UpgradeSchema implements UpgradeSchemaInterface
             $this->updateSchemaVersion221($setup);
         }
 
+        if (version_compare($context->getVersion(), '4.2.2', '<')) {
+            $this->updateSchemaVersion422($setup);
+        }
+
         $setup->endSetup();
     }
 
@@ -358,5 +362,25 @@ class UpgradeSchema implements UpgradeSchemaInterface
             ->setComment('Adyen Invoice');
 
         $setup->getConnection()->createTable($table);
+    }
+
+    public function updateSchemaVersion422(SchemaSetupInterface $setup)
+    {
+        $connection = $setup->getConnection();
+        $tableName = $setup->getTable('vault_payment_token');
+
+        $hppPaymentMethodCode = [
+            'type' => Table::TYPE_TEXT,
+            'length' => 255,
+            'nullable' => true,
+            'comment' => 'Adyen HPP payment method code',
+            'after' => 'payment_method_code',
+        ];
+
+        $connection->addColumn(
+            $tableName,
+            'hpp_payment_method_code',
+            $hppPaymentMethodCode
+        );
     }
 }
