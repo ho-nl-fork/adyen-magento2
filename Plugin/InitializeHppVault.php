@@ -1,5 +1,4 @@
-<?xml version="1.0"?>
-<!--
+<?php
 /**
  *                       ######
  *                       ######
@@ -16,22 +15,30 @@
  *
  * Adyen Payment module (https://www.adyen.com/)
  *
- * Copyright (c) 2015 Adyen BV (https://www.adyen.com/)
+ * Copyright (c) 2019 Adyen BV (https://www.adyen.com/)
  * See LICENSE.txt for license details.
  *
  * Author: Adyen <magento@adyen.com>
  */
--->
-<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:Module/etc/module.xsd">
 
-    <module name="Adyen_Payment" setup_version="4.2.2">
-        <sequence>
-            <module name="Magento_Sales"/>
-            <module name="Magento_Quote"/>
-            <module name="Magento_Checkout"/>
-            <module name="Magento_Paypal"/>
-            <module name="Magento_AdminNotification"/>
-            <module name="Magento_Vault"/>
-        </sequence>
-    </module>
-</config>
+namespace Adyen\Payment\Plugin;
+
+use Adyen\Payment\Model\Ui\AdyenHppConfigProvider;
+use Magento\Vault\Model\Method\Vault;
+
+class InitializeHppVault
+{
+    /**
+     * @param Vault $subject
+     * @param callable $proceed
+     * @return bool
+     */
+    public function aroundIsInitializeNeeded(Vault $subject, callable $proceed)
+    {
+        if ($subject->getCode() == AdyenHppConfigProvider::CC_VAULT_CODE) {
+            return false;
+        }
+
+        return $proceed();
+    }
+}

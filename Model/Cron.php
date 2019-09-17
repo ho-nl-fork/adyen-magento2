@@ -25,7 +25,9 @@ namespace Adyen\Payment\Model;
 
 use Adyen\Payment\Model\Config\OrderConfigProviderFactoryInterface;
 use Magento\Framework\Api\SearchCriteriaBuilder;
+use Magento\Framework\Encryption\EncryptorInterface;
 use Magento\Framework\Webapi\Exception;
+use Magento\Sales\Api\OrderPaymentRepositoryInterface;
 use Magento\Sales\Model\Order\Email\Sender\OrderSender;
 use Magento\Sales\Model\Order\Email\Sender\InvoiceSender;
 use Magento\Framework\App\Area;
@@ -34,6 +36,8 @@ use Magento\Framework\Phrase\Renderer\Placeholder;
 use Magento\Framework\Phrase;
 use Magento\Sales\Model\Order\InvoiceRepository;
 use Magento\Sales\Model\OrderRepository;
+use Magento\Vault\Api\Data\PaymentTokenFactoryInterface;
+use Magento\Vault\Api\PaymentTokenManagementInterface;
 
 class Cron
 {
@@ -225,6 +229,23 @@ class Cron
     private $transactionBuilder;
 
     /**
+     * @var PaymentTokenFactoryInterface
+     */
+    private $paymentTokenFactory;
+    /**
+     * @var EncryptorInterface
+     */
+    private $encryptor;
+    /**
+     * @var PaymentTokenManagementInterface
+     */
+    private $paymentTokenManagement;
+    /**
+     * @var OrderPaymentRepositoryInterface
+     */
+    private $orderPaymentRepository;
+
+    /**
      * Cron constructor.
      *
      * @param OrderConfigProviderFactoryInterface $orderConfigProviderFactory
@@ -248,6 +269,10 @@ class Cron
      * @param ResourceModel\Billing\Agreement $agreementResourceModel
      * @param \Magento\Sales\Model\Order\Payment\Transaction\Builder $transactionBuilder
      * @param InvoiceRepository $invoiceRepository
+     * @param PaymentTokenFactoryInterface $paymentTokenFactory
+     * @param EncryptorInterface $encryptor
+     * @param PaymentTokenManagementInterface $paymentTokenManagement
+     * @param OrderPaymentRepositoryInterface $orderPaymentRepository
      */
     public function __construct(
         OrderConfigProviderFactoryInterface $orderConfigProviderFactory,
@@ -270,7 +295,11 @@ class Cron
         OrderRepository $orderRepository,
         \Adyen\Payment\Model\ResourceModel\Billing\Agreement $agreementResourceModel,
         \Magento\Sales\Model\Order\Payment\Transaction\Builder $transactionBuilder,
-        InvoiceRepository $invoiceRepository
+        InvoiceRepository $invoiceRepository,
+        PaymentTokenFactoryInterface $paymentTokenFactory,
+        EncryptorInterface $encryptor,
+        PaymentTokenManagementInterface $paymentTokenManagement,
+        OrderPaymentRepositoryInterface $orderPaymentRepository
     ) {
         $this->orderConfigProviderFactory = $orderConfigProviderFactory;
         $this->_adyenLogger = $adyenLogger;
@@ -293,6 +322,10 @@ class Cron
         $this->agreementResourceModel = $agreementResourceModel;
         $this->transactionBuilder = $transactionBuilder;
         $this->invoiceRepository = $invoiceRepository;
+        $this->paymentTokenFactory = $paymentTokenFactory;
+        $this->encryptor = $encryptor;
+        $this->paymentTokenManagement = $paymentTokenManagement;
+        $this->orderPaymentRepository = $orderPaymentRepository;
     }
 
     /**
@@ -994,6 +1027,53 @@ class Cron
 
             case Notification::RECURRING_CONTRACT:
 
+                // Create Vault tokens based on recurring contract notifications for iDEAL and Sofort (directEbanking).
+                // These will only be available once, right after creating the initial payment which creates the SEPA details.
+                // After this, recurring contract notifications with payment method 'sepadirectdebit' will be returned,
+                // no need to process those.
+                if ($this->_adyenHelper->isCreditCardVaultEnabled()
+                    && in_array($this->_paymentMethod, ['ideal', 'directEbanking'])
+                ) {
+                    $customerId = $this->_order->getCustomerId();
+
+                    $notifications = $this->_notificationFactory->create();
+                    $notifications->addFieldToFilter('pspreference', $this->_originalReference);
+                    /** @var \Adyen\Payment\Model\Notification $parentNotification */
+                    $parentNotification = $notifications->getFirstItem();
+
+                    $payment = $this->_order->getPayment();
+
+                    $extensionAttributes = $payment->getExtensionAttributes();
+
+                    $paymentToken = $this->paymentTokenFactory->create(PaymentTokenFactoryInterface::TOKEN_TYPE_ACCOUNT);
+
+                    // SEPA doesn't have an expiration date, only CC has
+                    $paymentToken->setExpiresAt('2000-01-01 00:00:00');
+
+                    $paymentToken->setGatewayToken($this->_pspReference);
+                    $paymentToken->setCustomerId($customerId);
+                    $paymentToken->setIsActive(true);
+                    $paymentToken->setPaymentMethodCode('adyen_hpp');
+                    $paymentToken->setHppPaymentMethodCode($this->_paymentMethod);
+                    $paymentToken->setTokenDetails(json_encode(unserialize($parentNotification->getAdditionalData())));
+                    $paymentToken->setIsVisible(true);
+
+                    $hashKey = $customerId;
+
+                    $hashKey .= $paymentToken->getPaymentMethodCode()
+                        . $paymentToken->getType()
+                        . $paymentToken->getTokenDetails();
+
+                    $hash = $this->encryptor->getHash($hashKey);
+
+                    $paymentToken->setPublicHash($hash);
+
+                    $this->paymentTokenManagement->saveTokenWithPaymentLink($paymentToken, $payment);
+
+                    $extensionAttributes->setVaultPaymentToken($paymentToken);
+                    $payment->setExtensionAttributes($extensionAttributes);
+                    $this->orderPaymentRepository->save($payment);
+                }
 
                 // only store billing agreements if Vault is disabled
                 if (!$this->_adyenHelper->isCreditCardVaultEnabled()) {
