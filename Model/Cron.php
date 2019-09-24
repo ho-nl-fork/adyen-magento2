@@ -23,6 +23,7 @@
 
 namespace Adyen\Payment\Model;
 
+use Adyen\Payment\Gateway\Response\VaultDetailsHandler;
 use Adyen\Payment\Model\Config\OrderConfigProviderFactoryInterface;
 use Magento\Framework\Api\SearchCriteriaBuilder;
 use Magento\Framework\Encryption\EncryptorInterface;
@@ -244,6 +245,10 @@ class Cron
      * @var OrderPaymentRepositoryInterface
      */
     private $orderPaymentRepository;
+    /**
+     * @var VaultDetailsHandler
+     */
+    private $vaultDetailsHandler;
 
     /**
      * Cron constructor.
@@ -273,6 +278,7 @@ class Cron
      * @param EncryptorInterface $encryptor
      * @param PaymentTokenManagementInterface $paymentTokenManagement
      * @param OrderPaymentRepositoryInterface $orderPaymentRepository
+     * @param VaultDetailsHandler $vaultDetailsHandler
      */
     public function __construct(
         OrderConfigProviderFactoryInterface $orderConfigProviderFactory,
@@ -299,7 +305,8 @@ class Cron
         PaymentTokenFactoryInterface $paymentTokenFactory,
         EncryptorInterface $encryptor,
         PaymentTokenManagementInterface $paymentTokenManagement,
-        OrderPaymentRepositoryInterface $orderPaymentRepository
+        OrderPaymentRepositoryInterface $orderPaymentRepository,
+        VaultDetailsHandler $vaultDetailsHandler
     ) {
         $this->orderConfigProviderFactory = $orderConfigProviderFactory;
         $this->_adyenLogger = $adyenLogger;
@@ -326,6 +333,7 @@ class Cron
         $this->encryptor = $encryptor;
         $this->paymentTokenManagement = $paymentTokenManagement;
         $this->orderPaymentRepository = $orderPaymentRepository;
+        $this->vaultDetailsHandler = $vaultDetailsHandler;
     }
 
     /**
@@ -1039,19 +1047,6 @@ class Cron
 
                     $customerId = $this->_order->getCustomerId();
 
-                    // Check if CC vault token already exists, ignore the notification if it does exist
-                    if (in_array($this->_paymentMethod, $ccRecurringMethods)) {
-                        $existingToken = $this->paymentTokenManagement->getByGatewayToken($this->_pspReference, $paymentMethodCode, $customerId);
-                        if ($existingToken) {
-                            break;
-                        }
-                    }
-
-                    // Always process HPP notifications, these will only be available once, right after creating
-                    // the initial payment which creates the SEPA details.
-                    // After this, recurring contract notifications with payment method 'sepadirectdebit' will be returned,
-                    // no need to process those.
-
                     $notifications = $this->_notificationFactory->create();
                     $notifications->addFieldToFilter('pspreference', $this->_originalReference);
                     /** @var \Adyen\Payment\Model\Notification $parentNotification */
@@ -1067,15 +1062,14 @@ class Cron
                             : PaymentTokenFactoryInterface::TOKEN_TYPE_ACCOUNT
                     );
 
-                    // SEPA doesn't have an expiration date, only CC has
-                    $paymentToken->setExpiresAt('2000-01-01 00:00:00');
-
                     $paymentToken->setGatewayToken($this->_pspReference);
                     $paymentToken->setCustomerId($customerId);
                     $paymentToken->setIsActive(true);
                     $paymentToken->setPaymentMethodCode($paymentMethodCode);
 
                     if (in_array($this->_paymentMethod, $hppRecurringMethods)) {
+                        // SEPA doesn't have an expiration date, only CC has
+                        $paymentToken->setExpiresAt('2000-01-01 00:00:00');
                         $paymentToken->setHppPaymentMethodCode($this->_paymentMethod);
                         $paymentToken->setTokenDetails(json_encode(unserialize($parentNotification->getAdditionalData())));
                     }
@@ -1086,6 +1080,8 @@ class Cron
                             'maskedCC' => $additionalData['cardSummary'],
                             'expirationDate' => $additionalData['expiryDate'],
                         ];
+                        $expiresAt = $this->vaultDetailsHandler->getExpirationDate($additionalData['expiryDate']);
+                        $paymentToken->setExpiresAt($expiresAt);
                         $paymentToken->setTokenDetails(json_encode($details));
                     }
 
