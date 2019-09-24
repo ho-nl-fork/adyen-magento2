@@ -1077,9 +1077,18 @@ class Cron
 
                     if (in_array($this->_paymentMethod, $hppRecurringMethods)) {
                         $paymentToken->setHppPaymentMethodCode($this->_paymentMethod);
+                        $paymentToken->setTokenDetails(json_encode(unserialize($parentNotification->getAdditionalData())));
+                    }
+                    else {
+                        $additionalData = unserialize($parentNotification->getAdditionalData());
+                        $details = [
+                            'type' => $additionalData['paymentMethod'],
+                            'maskedCC' => $additionalData['cardSummary'],
+                            'expirationDate' => $additionalData['expiryDate'],
+                        ];
+                        $paymentToken->setTokenDetails(json_encode($details));
                     }
 
-                    $paymentToken->setTokenDetails(json_encode(unserialize($parentNotification->getAdditionalData())));
                     $paymentToken->setIsVisible(true);
 
                     $hashKey = $customerId;
