@@ -1032,7 +1032,7 @@ class Cron
                 // After this, recurring contract notifications with payment method 'sepadirectdebit' will be returned,
                 // no need to process those.
                 if ($this->_adyenHelper->isCreditCardVaultEnabled()
-                    && in_array($this->_paymentMethod, ['ideal', 'directEbanking'])
+                    && in_array($this->_paymentMethod, ['ideal', 'directEbanking', 'giropay'])
                 ) {
                     $customerId = $this->_order->getCustomerId();
 
