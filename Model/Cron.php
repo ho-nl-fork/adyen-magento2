@@ -1027,14 +1027,30 @@ class Cron
 
             case Notification::RECURRING_CONTRACT:
 
-                // Create Vault tokens based on recurring contract notifications for iDEAL and Sofort (directEbanking).
-                // These will only be available once, right after creating the initial payment which creates the SEPA details.
-                // After this, recurring contract notifications with payment method 'sepadirectdebit' will be returned,
-                // no need to process those.
+                // Create Vault tokens based on recurring contract notifications.
+                $hppRecurringMethods = ['ideal', 'directEbanking', 'giropay'];
+                $ccRecurringMethods = ['amex', 'cartebancaire', 'jcb', 'mc', 'visa'];
                 if ($this->_adyenHelper->isCreditCardVaultEnabled()
-                    && in_array($this->_paymentMethod, ['ideal', 'directEbanking', 'giropay'])
+                    && in_array($this->_paymentMethod, array_merge($hppRecurringMethods, $ccRecurringMethods))
                 ) {
+                    $paymentMethodCode = in_array($this->_paymentMethod, $hppRecurringMethods)
+                        ? 'adyen_hpp'
+                        : 'adyen_cc';
+
                     $customerId = $this->_order->getCustomerId();
+
+                    // Check if CC vault token already exists, ignore the notification if it does exist
+                    if (in_array($this->_paymentMethod, $ccRecurringMethods)) {
+                        $existingToken = $this->paymentTokenManagement->getByGatewayToken($this->_pspReference, $paymentMethodCode, $customerId);
+                        if ($existingToken) {
+                            break;
+                        }
+                    }
+
+                    // Always process HPP notifications, these will only be available once, right after creating
+                    // the initial payment which creates the SEPA details.
+                    // After this, recurring contract notifications with payment method 'sepadirectdebit' will be returned,
+                    // no need to process those.
 
                     $notifications = $this->_notificationFactory->create();
                     $notifications->addFieldToFilter('pspreference', $this->_originalReference);
@@ -1045,7 +1061,11 @@ class Cron
 
                     $extensionAttributes = $payment->getExtensionAttributes();
 
-                    $paymentToken = $this->paymentTokenFactory->create(PaymentTokenFactoryInterface::TOKEN_TYPE_ACCOUNT);
+                    $paymentToken = $this->paymentTokenFactory->create(
+                        in_array($this->_paymentMethod, $ccRecurringMethods)
+                            ? PaymentTokenFactoryInterface::TOKEN_TYPE_CREDIT_CARD
+                            : PaymentTokenFactoryInterface::TOKEN_TYPE_ACCOUNT
+                    );
 
                     // SEPA doesn't have an expiration date, only CC has
                     $paymentToken->setExpiresAt('2000-01-01 00:00:00');
@@ -1053,8 +1073,12 @@ class Cron
                     $paymentToken->setGatewayToken($this->_pspReference);
                     $paymentToken->setCustomerId($customerId);
                     $paymentToken->setIsActive(true);
-                    $paymentToken->setPaymentMethodCode('adyen_hpp');
-                    $paymentToken->setHppPaymentMethodCode($this->_paymentMethod);
+                    $paymentToken->setPaymentMethodCode($paymentMethodCode);
+
+                    if (in_array($this->_paymentMethod, $hppRecurringMethods)) {
+                        $paymentToken->setHppPaymentMethodCode($this->_paymentMethod);
+                    }
+
                     $paymentToken->setTokenDetails(json_encode(unserialize($parentNotification->getAdditionalData())));
                     $paymentToken->setIsVisible(true);
 
