@@ -98,9 +98,10 @@ class PayByMailCommand implements CommandInterface
     /**
      * @param \Magento\Sales\Model\Order\Payment $payment
      * @param float|bool $paymentAmount
+     * @param string|null $merchantReference
      * @return string
      */
-    public function generatePaymentUrl($payment, $paymentAmount = false)
+    public function generatePaymentUrl($payment, $paymentAmount = false, $merchantReference = null)
     {
         $order = $payment->getOrder();
 
@@ -114,7 +115,7 @@ class PayByMailCommand implements CommandInterface
         $this->_adyenHelper->setOrder($order);
 
         $url = $this->getFormUrl();
-        $fields = $this->getFormFields($payment, $paymentAmount);
+        $fields = $this->getFormFields($payment, $paymentAmount, $merchantReference);
 
         $count = 1;
         $size = count($fields);
@@ -150,9 +151,10 @@ class PayByMailCommand implements CommandInterface
     /**
      * @param \Magento\Sales\Model\Order\Payment $payment
      * @param float|bool $paymentAmount
+     * @param string|null $merchantReference
      * @return array
      */
-    protected function getFormFields($payment, $paymentAmount = false)
+    protected function getFormFields($payment, $paymentAmount = false, $merchantReference = null)
     {
         $order = $payment->getOrder();
 
@@ -196,7 +198,7 @@ class PayByMailCommand implements CommandInterface
 
         $formFields = [];
         $formFields['merchantAccount']   = $merchantAccount;
-        $formFields['merchantReference'] = $realOrderId;
+        $formFields['merchantReference'] = $merchantReference ?: $realOrderId;
         $formFields['paymentAmount']     = (int)$amount;
         $formFields['currencyCode']      = $orderCurrencyCode;
         $formFields['shipBeforeDate']    = date(
