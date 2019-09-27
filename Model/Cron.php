@@ -29,6 +29,7 @@ use Magento\Framework\Api\SearchCriteriaBuilder;
 use Magento\Framework\Encryption\EncryptorInterface;
 use Magento\Framework\Webapi\Exception;
 use Magento\Sales\Api\OrderPaymentRepositoryInterface;
+use Magento\Sales\Model\Order;
 use Magento\Sales\Model\Order\Email\Sender\OrderSender;
 use Magento\Sales\Model\Order\Email\Sender\InvoiceSender;
 use Magento\Framework\App\Area;
@@ -469,6 +470,23 @@ class Cron
 
             // add notification to comment history status is current status
             $this->_addStatusHistoryComment();
+
+            if ($notification->getEventCode() == Notification::AUTHORISATION
+                && $notification->getSuccess() == 'true'
+                && $this->_order->getStatus() == Order::STATE_CANCELED
+            ) {
+                // Reset cancelled order, so a new payment notification can be processed
+                // Can happen when the first payment fails and new payment is placed via payment link
+                $this->_order->setState(Order::STATE_NEW);
+                $this->_order->setStatus('pending');
+
+                foreach ($this->_order->getItems() as $item) {
+                    $item->setQtyCanceled(0);
+                }
+
+                $this->_order->addStatusHistoryComment(__("Cancelled order is reset to status 'New', to process new authorisation notification"));
+                $this->_order->save();
+            }
 
             $previousAdyenEventCode = $this->_order->getData('adyen_notification_event_code');
 
