@@ -1076,9 +1076,9 @@ class Cron
                     else {
                         $additionalData = unserialize($parentNotification->getAdditionalData());
                         $details = [
-                            'type' => $additionalData['paymentMethod'],
+                            'type' => $parentNotification->getPaymentMethod(),
                             'maskedCC' => $additionalData['cardSummary'],
-                            'expirationDate' => $additionalData['expiryDate'],
+                            'expirationDate' => ltrim($additionalData['expiryDate'], 0),
                         ];
                         $expiresAt = $this->vaultDetailsHandler->getExpirationDate($additionalData['expiryDate']);
                         $paymentToken->setExpiresAt($expiresAt);
