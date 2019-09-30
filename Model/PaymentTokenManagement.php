@@ -44,14 +44,21 @@ class PaymentTokenManagement extends \Magento\Vault\Model\PaymentTokenManagement
     }
 
     /**
+     * Overwritten to revert changes made in:
+     * https://github.com/magento/magento2/commit/7140edcc8106f9986335c0f4107b911a65238959
+     *
+     * Retrieve potential duplicate token by gateway token instead of public hash, since
+     * the hashing algorithm may have been changed since initial token creation.
+     *
      * @param PaymentTokenInterface $token
      * @param OrderPaymentInterface $payment
      * @return bool
      */
     public function saveTokenWithPaymentLink(PaymentTokenInterface $token, OrderPaymentInterface $payment)
     {
-        $tokenDuplicate = $this->getByPublicHash(
-            $token->getPublicHash(),
+        $tokenDuplicate = $this->getByGatewayToken(
+            $token->getGatewayToken(),
+            $token->getPaymentMethodCode(),
             $token->getCustomerId()
         );
 
