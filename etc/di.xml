@@ -949,4 +949,5 @@
     <type name="Magento\Vault\Model\Method\Vault">
         <plugin name="AdyenInitializeHppVault" type="Adyen\Payment\Plugin\InitializeHppVault"/>
     </type>
+    <preference for="Magento\Vault\Model\PaymentTokenManagement" type="Adyen\Payment\Model\PaymentTokenManagement"/>
 </config>
