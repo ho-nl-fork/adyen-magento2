@@ -29,6 +29,7 @@ use Magento\Framework\Api\SearchCriteriaBuilder;
 use Magento\Framework\Encryption\EncryptorInterface;
 use Magento\Framework\Webapi\Exception;
 use Magento\Sales\Api\OrderPaymentRepositoryInterface;
+use Magento\Sales\Model\Order;
 use Magento\Sales\Model\Order\Email\Sender\OrderSender;
 use Magento\Sales\Model\Order\Email\Sender\InvoiceSender;
 use Magento\Framework\App\Area;
@@ -39,6 +40,7 @@ use Magento\Sales\Model\Order\InvoiceRepository;
 use Magento\Sales\Model\OrderRepository;
 use Magento\Vault\Api\Data\PaymentTokenFactoryInterface;
 use Magento\Vault\Api\PaymentTokenManagementInterface;
+use ReachDigital\Subscription\Projection\Subscription\SubscriptionFinder;
 
 class Cron
 {
@@ -249,6 +251,10 @@ class Cron
      * @var VaultDetailsHandler
      */
     private $vaultDetailsHandler;
+    /**
+     * @var SubscriptionFinder
+     */
+    private $subscriptionFinder;
 
     /**
      * Cron constructor.
@@ -279,6 +285,7 @@ class Cron
      * @param PaymentTokenManagementInterface $paymentTokenManagement
      * @param OrderPaymentRepositoryInterface $orderPaymentRepository
      * @param VaultDetailsHandler $vaultDetailsHandler
+     * @param SubscriptionFinder $subscriptionFinder
      */
     public function __construct(
         OrderConfigProviderFactoryInterface $orderConfigProviderFactory,
@@ -306,7 +313,8 @@ class Cron
         EncryptorInterface $encryptor,
         PaymentTokenManagementInterface $paymentTokenManagement,
         OrderPaymentRepositoryInterface $orderPaymentRepository,
-        VaultDetailsHandler $vaultDetailsHandler
+        VaultDetailsHandler $vaultDetailsHandler,
+        SubscriptionFinder $subscriptionFinder
     ) {
         $this->orderConfigProviderFactory = $orderConfigProviderFactory;
         $this->_adyenLogger = $adyenLogger;
@@ -334,6 +342,7 @@ class Cron
         $this->paymentTokenManagement = $paymentTokenManagement;
         $this->orderPaymentRepository = $orderPaymentRepository;
         $this->vaultDetailsHandler = $vaultDetailsHandler;
+        $this->subscriptionFinder = $subscriptionFinder;
     }
 
     /**
@@ -411,6 +420,45 @@ class Cron
             $order = reset($orderList);
             $this->_order = $order;
 
+            /**
+             * Process recurring contract notification with subscription ID as reference
+             * to create Vault tokens
+             */
+            if ($this->_adyenHelper->isCreditCardVaultEnabled()
+                && !$this->_order
+                && strpos($notification->getMerchantReference(), 'SUB') === 0
+                && $notification->getSuccess() === 'true'
+            ) {
+                if ($notification->getEventCode() == Notification::AUTHORISATION) {
+                    // Set as processed, keep the notification because
+                    // we need the additional data for the Vault token creation
+                    $this->_updateNotification($notification, false, true);
+                    continue;
+                }
+                elseif ($notification->getEventCode() == Notification::RECURRING_CONTRACT) {
+                    $this->_eventCode = $notification->getEventCode();
+                    $this->_paymentMethod = $notification->getPaymentMethod();
+                    $this->_pspReference = $notification->getPspReference();
+                    $this->_originalReference = $notification->getOriginalReference();
+
+                    // Retrieve original subscription order
+                    $subscriptionIncrementId = ltrim($notification->getMerchantReference(), 'SUB');
+                    $subscription = $this->subscriptionFinder->findByIncrementId($subscriptionIncrementId);
+                    $this->_order = $this->orderRepository->get($subscription['original_order_id']);
+
+                    $this->_processNotification();
+
+                    $this->_updateNotification($notification, false, true);
+
+                    $this->_adyenLogger->addAdyenNotificationCronjob(
+                        sprintf("Subscription recurring contract notification %s is processed", $notification->getEntityId())
+                    );
+                    ++$count;
+
+                    continue;
+                }
+            }
+
             if (!$this->_order) {
                 // order does not exists remove from queue
                 $notification->delete();
@@ -422,6 +470,23 @@ class Cron
 
             // add notification to comment history status is current status
             $this->_addStatusHistoryComment();
+
+            if ($notification->getEventCode() == Notification::AUTHORISATION
+                && $notification->getSuccess() == 'true'
+                && $this->_order->getStatus() == Order::STATE_CANCELED
+            ) {
+                // Reset cancelled order, so a new payment notification can be processed
+                // Can happen when the first payment fails and new payment is placed via payment link
+                $this->_order->setState(Order::STATE_NEW);
+                $this->_order->setStatus('pending');
+
+                foreach ($this->_order->getItems() as $item) {
+                    $item->setQtyCanceled(0);
+                }
+
+                $this->_order->addStatusHistoryComment(__("Cancelled order is reset to status 'New', to process new authorisation notification"));
+                $this->_order->save();
+            }
 
             $previousAdyenEventCode = $this->_order->getData('adyen_notification_event_code');
 
@@ -876,7 +941,6 @@ class Cron
     {
 
         $this->_adyenLogger->addAdyenNotificationCronjob('Processing the notification');
-        $_paymentCode = $this->_paymentMethodCode();
 
         switch ($this->_eventCode) {
             case Notification::REFUND_FAILED:
