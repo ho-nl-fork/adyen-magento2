@@ -32,8 +32,6 @@ class AdyenHppConfigProvider implements ConfigProviderInterface
 
     const CODE = 'adyen_hpp';
 
-    const CC_VAULT_CODE = 'adyen_hpp_vault';
-
     /**
      * @var PaymentHelper
      */
@@ -112,7 +110,6 @@ class AdyenHppConfigProvider implements ConfigProviderInterface
         $config = [
             'payment' => [
                 self::CODE => [
-                    'vaultCode' => self::CC_VAULT_CODE,
                     'isActive' => true,
                     'redirectUrl' => $this->urlBuilder->getUrl(
                         'adyen/process/redirect',
