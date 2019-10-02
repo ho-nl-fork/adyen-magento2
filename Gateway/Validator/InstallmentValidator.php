@@ -43,26 +43,39 @@ class InstallmentValidator extends AbstractValidator
      * @var \Magento\Checkout\Model\Session
      */
     private $session;
+    /**
+     * @var \Magento\Backend\Model\Session\Quote
+     */
+    private $backendSession;
 
     /**
      * InstallmentValidator constructor.
      * @param \Magento\Payment\Gateway\Validator\ResultInterfaceFactory $resultFactory
      * @param \Adyen\Payment\Logger\AdyenLogger $adyenLogger
      * @param \Adyen\Payment\Helper\Data $adyenHelper
-     * @param \Magento\Framework\App\ObjectManager $objectManager
+     * @param \Magento\Checkout\Model\Session $session
+     * @param \Magento\Backend\Model\Session\Quote $backendSession
+     * @throws \Magento\Framework\Exception\LocalizedException
+     * @throws \Magento\Framework\Exception\NoSuchEntityException
      */
     public function __construct(
         \Magento\Payment\Gateway\Validator\ResultInterfaceFactory $resultFactory,
         \Adyen\Payment\Logger\AdyenLogger $adyenLogger,
         \Adyen\Payment\Helper\Data $adyenHelper,
-        \Magento\Checkout\Model\Session $session
+        \Magento\Checkout\Model\Session $session,
+        \Magento\Backend\Model\Session\Quote $backendSession
     ) {
         $this->adyenLogger = $adyenLogger;
         $this->adyenHelper = $adyenHelper;
         $this->session = $session;
+        $this->backendSession = $backendSession;
         parent::__construct($resultFactory);
 
-        $this->adyenHelper->setQuote($this->session->getQuote());
+        $quote = $this->session->getQuote();
+        if ($this->backendSession->getQuoteId()) {
+            $quote = $this->backendSession->getQuote();
+        }
+        $this->adyenHelper->setQuote($quote);
     }
 
 
@@ -71,7 +84,9 @@ class InstallmentValidator extends AbstractValidator
         $isValid = true;
         $fails = [];
         $payment = $validationSubject['payment'];
-        $quote = $this->session->getQuote();
+        $quote = $this->backendSession->getQuoteId()
+            ? $this->backendSession->getQuote()
+            : $this->session->getQuote();
 
         $this->adyenHelper->setQuote($quote);
 
