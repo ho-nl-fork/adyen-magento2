@@ -1285,6 +1285,10 @@ class Cron
                     $this->_adyenLogger->addAdyenNotificationCronjob('Ignore recurring_contract notification because Vault feature is enabled');
                 }
                 break;
+            case 'CHARGEBACK':
+                $this->_order->setStatus('chargeback');
+                $this->orderRepository->save($this->_order);
+                break;
             default:
                 $this->_adyenLogger->addAdyenNotificationCronjob(
                     sprintf('This notification event: %s is not supported so will be ignored', $this->_eventCode)
