@@ -1161,11 +1161,20 @@ class Cron
 
                     $paymentToken->setPublicHash($hash);
 
-                    $this->paymentTokenManagement->saveTokenWithPaymentLink($paymentToken, $payment);
+                    try {
+                        $this->paymentTokenManagement->saveTokenWithPaymentLink($paymentToken, $payment);
 
-                    $extensionAttributes->setVaultPaymentToken($paymentToken);
-                    $payment->setExtensionAttributes($extensionAttributes);
-                    $this->orderPaymentRepository->save($payment);
+                        $extensionAttributes->setVaultPaymentToken($paymentToken);
+                        $payment->setExtensionAttributes($extensionAttributes);
+                        $this->orderPaymentRepository->save($payment);
+                    }
+                    catch (\Exception $e) {
+                        $message = sprintf('Failed to process recurring contract notification: %s',
+                            $e->getMessage());
+                        $this->_adyenLogger->addAdyenNotificationCronjob($message);
+                        $comment = $this->_order->addStatusHistoryComment($message);
+                        $this->_order->addRelatedObject($comment);
+                    }
                 }
 
                 // only store billing agreements if Vault is disabled
