@@ -33,6 +33,11 @@ class CheckoutResponseValidator extends AbstractValidator
     private $adyenLogger;
 
     /**
+     * @var \Adyen\Payment\Helper\Data
+     */
+    private  $adyenHelper;
+
+    /**
      * GeneralResponseValidator constructor.
      *
      * @param \Magento\Payment\Gateway\Validator\ResultInterfaceFactory $resultFactory
@@ -40,9 +45,11 @@ class CheckoutResponseValidator extends AbstractValidator
      */
     public function __construct(
         \Magento\Payment\Gateway\Validator\ResultInterfaceFactory $resultFactory,
-        \Adyen\Payment\Logger\AdyenLogger $adyenLogger
+        \Adyen\Payment\Logger\AdyenLogger $adyenLogger,
+        \Adyen\Payment\Helper\Data $adyenHelper
     ) {
         $this->adyenLogger = $adyenLogger;
+        $this->adyenHelper = $adyenHelper;
         parent::__construct($resultFactory);
     }
 
@@ -59,10 +66,19 @@ class CheckoutResponseValidator extends AbstractValidator
         $payment->setAdditionalInformation('3dActive', false);
         $isValid = true;
         $errorMessages = [];
-
         // validate result
         if (isset($response['resultCode'])) {
             switch ($response['resultCode']) {
+                case "IdentifyShopper":
+                    $payment->setAdditionalInformation('threeDSType', $response['resultCode']);
+                    $payment->setAdditionalInformation('threeDS2Token', $response['authentication']['threeds2.fingerprintToken']);
+                    $payment->setAdditionalInformation('threeDS2PaymentData', $response['paymentData']);
+                    break;
+                case "ChallengeShopper":
+                    $payment->setAdditionalInformation('threeDSType', $response['resultCode']);
+                    $payment->setAdditionalInformation('threeDS2Token', $response['authentication']['threeds2.challengeToken']);
+                    $payment->setAdditionalInformation('threeDS2PaymentData', $response['paymentData']);
+                    break;
                 case "Authorised":
                 case "Received":
                     // For banktransfers store all bankTransfer details
@@ -80,9 +96,12 @@ class CheckoutResponseValidator extends AbstractValidator
                         }
                     }
 
-                    $payment->setAdditionalInformation('pspReference', $response['pspReference']);
-                    break;
-                case "Received":
+                    // Save cc_type if available in the response
+                    if (!empty($response['additionalData']['paymentMethod'])) {
+                        $ccType = $this->adyenHelper->getMagentoCreditCartType($response['additionalData']['paymentMethod']);
+                        $payment->setAdditionalInformation('cc_type', $ccType);
+                        $payment->setCcType($ccType);
+                    }
                     $payment->setAdditionalInformation('pspReference', $response['pspReference']);
                     break;
                 case "PresentToShopper":
@@ -114,6 +133,8 @@ class CheckoutResponseValidator extends AbstractValidator
                     }
                     break;
                 case "RedirectShopper":
+
+                    $payment->setAdditionalInformation('threeDSType', $response['resultCode']);
 
                     $redirectUrl = null;
                     $paymentData = null;

@@ -49,12 +49,18 @@ class InstallmentValidator extends AbstractValidator
     private $backendSession;
 
     /**
+     * @var \Magento\Framework\Serialize\SerializerInterface
+     */
+    private $serializer;
+
+    /**
      * InstallmentValidator constructor.
      * @param \Magento\Payment\Gateway\Validator\ResultInterfaceFactory $resultFactory
      * @param \Adyen\Payment\Logger\AdyenLogger $adyenLogger
      * @param \Adyen\Payment\Helper\Data $adyenHelper
      * @param \Magento\Checkout\Model\Session $session
      * @param \Magento\Backend\Model\Session\Quote $backendSession
+     * @param \Magento\Framework\Serialize\SerializerInterface $serializer
      * @throws \Magento\Framework\Exception\LocalizedException
      * @throws \Magento\Framework\Exception\NoSuchEntityException
      */
@@ -63,12 +69,14 @@ class InstallmentValidator extends AbstractValidator
         \Adyen\Payment\Logger\AdyenLogger $adyenLogger,
         \Adyen\Payment\Helper\Data $adyenHelper,
         \Magento\Checkout\Model\Session $session,
-        \Magento\Backend\Model\Session\Quote $backendSession
+        \Magento\Backend\Model\Session\Quote $backendSession,
+        \Magento\Framework\Serialize\SerializerInterface $serializer
     ) {
         $this->adyenLogger = $adyenLogger;
         $this->adyenHelper = $adyenHelper;
         $this->session = $session;
         $this->backendSession = $backendSession;
+        $this->serializer = $serializer;
         parent::__construct($resultFactory);
 
         $quote = $this->session->getQuote();
@@ -97,7 +105,7 @@ class InstallmentValidator extends AbstractValidator
             $installmentSelected = $payment->getAdditionalInformation('number_of_installments');
             $ccType = $payment->getAdditionalInformation('cc_type');
             if ($installmentsAvailable) {
-                $installments = unserialize($installmentsAvailable);
+                $installments = $this->serializer->unserialize($installmentsAvailable);
             }
             if ($installmentSelected && $installmentsAvailable) {
                 $isValid = false;

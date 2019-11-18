@@ -97,9 +97,9 @@ class Cc extends \Magento\Payment\Block\Form\Cc
 	/**
 	 * @return string
 	 */
-	public function getCheckoutContextUrl()
+	public function getCheckoutEnvironment()
 	{
-		return $this->adyenHelper->getCheckoutContextUrl($this->checkoutSession->getQuote()->getStore()->getId());
+		return $this->adyenHelper->getCheckoutEnvironment($this->checkoutSession->getQuote()->getStore()->getId());
 	}
 
     /**
@@ -109,14 +109,9 @@ class Cc extends \Magento\Payment\Block\Form\Cc
      */
     public function hasVerification()
     {
-        // if backend order and moto payments is turned on don't show cvc
+        // On Backend always use MOTO
         if ($this->appState->getAreaCode() === \Magento\Backend\App\Area\FrontNameResolver::AREA_CODE) {
-            $this->getCheckoutSession();
-            $store = $this->checkoutSession->getQuote()->getStore();
-            $enableMoto = $this->adyenHelper->getAdyenCcConfigDataFlag('enable_moto', $store->getId());
-            if ($enableMoto) {
-                return false;
-            }
+            return false;
         }
         return true;
     }
@@ -130,7 +125,7 @@ class Cc extends \Magento\Payment\Block\Form\Cc
 	}
 
 	/**
-	 * Retrieve availables credit card type codes by alt code
+	 * Retrieve available credit card type codes by alt code
 	 *
 	 * @return array
 	 */
@@ -151,4 +146,26 @@ class Cc extends \Magento\Payment\Block\Form\Cc
 
 		return $types;
 	}
+
+    /**
+     * Allow checkbox for MOTO payments to be saved as RECURRING
+     *
+     * @return bool
+     */
+	public function allowRecurring()
+    {
+        if ($this->adyenHelper->getAdyenAbstractConfigData('enable_recurring', null)) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * @return mixed
+     */
+    public function isVaultEnabled()
+    {
+        return $this->adyenHelper->isCreditCardVaultEnabled();
+    }
+
 }

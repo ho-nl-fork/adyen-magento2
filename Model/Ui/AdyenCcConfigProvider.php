@@ -75,6 +75,11 @@ class AdyenCcConfigProvider implements ConfigProviderInterface
     private $checkoutSession;
 
     /**
+     * @var \Magento\Framework\Serialize\SerializerInterface
+     */
+    private $serializer;
+
+    /**
      * AdyenCcConfigProvider constructor.
      *
      * @param \Magento\Payment\Helper\Data $paymentHelper
@@ -84,8 +89,8 @@ class AdyenCcConfigProvider implements ConfigProviderInterface
      * @param \Magento\Framework\View\Asset\Source $assetSource
      * @param \Magento\Store\Model\StoreManagerInterface $storeManager
      * @param \Magento\Payment\Model\CcConfig $ccConfig
-     * @param \Magento\Payment\Model\CcConfig $config
      * @param \Magento\Checkout\Model\Session $checkoutSession
+     * @param \Magento\Framework\Serialize\SerializerInterface $serializer
      */
     public function __construct(
         \Magento\Payment\Helper\Data $paymentHelper,
@@ -95,7 +100,8 @@ class AdyenCcConfigProvider implements ConfigProviderInterface
         \Magento\Framework\View\Asset\Source $assetSource,
         \Magento\Store\Model\StoreManagerInterface $storeManager,
         \Magento\Payment\Model\CcConfig $ccConfig,
-        \Magento\Checkout\Model\Session $checkoutSession
+        \Magento\Checkout\Model\Session $checkoutSession,
+        \Magento\Framework\Serialize\SerializerInterface $serializer
     ) {
         $this->_paymentHelper = $paymentHelper;
         $this->_adyenHelper = $adyenHelper;
@@ -105,6 +111,7 @@ class AdyenCcConfigProvider implements ConfigProviderInterface
         $this->ccConfig = $ccConfig;
         $this->storeManager = $storeManager;
         $this->checkoutSession = $checkoutSession;
+        $this->serializer = $serializer;
 
         $this->_adyenHelper->setQuote($checkoutSession->getQuote());
     }
@@ -156,7 +163,7 @@ class AdyenCcConfigProvider implements ConfigProviderInterface
         $config['payment']['adyenCc']['icons'] = $this->getIcons();
 
         $config['payment']['adyenCc']['originKey'] = $this->_adyenHelper->getOriginKeyForBaseUrl();
-        $config['payment']['adyenCc']['checkoutUrl'] = $this->_adyenHelper->getCheckoutContextUrl($this->storeManager->getStore()->getId());
+        $config['payment']['adyenCc']['checkoutEnvironment'] = $this->_adyenHelper->getCheckoutEnvironment($this->storeManager->getStore()->getId());
 
         // has installments by default false
         $config['payment']['adyenCc']['hasInstallments'] = false;
@@ -166,7 +173,7 @@ class AdyenCcConfigProvider implements ConfigProviderInterface
         $installments = $this->_adyenHelper->getAdyenCcConfigData('installments');
 
         if ($installmentsEnabled && $installments) {
-            $config['payment']['adyenCc']['installments'] = unserialize($installments);
+            $config['payment']['adyenCc']['installments'] = $this->serializer->unserialize($installments);
             $config['payment']['adyenCc']['hasInstallments'] = true;
         } else {
             $config['payment']['adyenCc']['installments'] = [];

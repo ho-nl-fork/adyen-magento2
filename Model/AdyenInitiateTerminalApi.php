@@ -93,8 +93,22 @@ class AdyenInitiateTerminalApi implements AdyenInitiateTerminalApiInterface
      * @return mixed
      * @throws \Exception
      */
-    public function initiate()
+    public function initiate($payload)
     {
+        // Decode payload from frontend
+        $payload = json_decode($payload, true);
+
+        // Validate JSON that has just been parsed if it was in a valid format
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new \Magento\Framework\Exception\LocalizedException(__('Terminal API initiate request was not a valid JSON'));
+        }
+
+        if (empty($payload['terminal_id'])) {
+            throw new \Adyen\AdyenException("Terminal ID is empty in initiate request");
+        }
+
+        $poiId = $payload['terminal_id'];
+
         $quote = $this->checkoutSession->getQuote();
         $payment = $quote->getPayment();
         $payment->setMethod(AdyenPosCloudConfigProvider::CODE);
@@ -102,7 +116,7 @@ class AdyenInitiateTerminalApi implements AdyenInitiateTerminalApiInterface
 
         $service = $this->adyenHelper->createAdyenPosPaymentService($this->client);
         $transactionType = \Adyen\TransactionType::NORMAL;
-        $poiId = $this->adyenHelper->getPoiId($this->storeId);
+
         $serviceID = date("dHis");
         $initiateDate = date("U");
         $timeStamper = date("Y-m-d") . "T" . date("H:i:s+00:00");
@@ -139,13 +153,31 @@ class AdyenInitiateTerminalApi implements AdyenInitiateTerminalApiInterface
                                             'RequestedAmount' => doubleval($quote->getGrandTotal()),
                                         ],
                                 ],
-                            'PaymentData' =>
-                                [
-                                    'PaymentType' => $transactionType,
-                                ],
                         ],
                 ],
         ];
+
+        if (!empty($payload['number_of_installments'])) {
+            $request['SaleToPOIRequest']['PaymentRequest']['PaymentData'] = [
+                "PaymentType" => "Instalment",
+                "Instalment" => [
+                    "InstalmentType" => "EqualInstalments",
+                    "SequenceNumber" => 1,
+                    "Period" => 1,
+                    "PeriodUnit" => "Monthly",
+                    "TotalNbOfPayments" => (int)$payload['number_of_installments']
+                ]
+            ];
+
+            $request['SaleToPOIRequest']['PaymentRequest']['PaymentTransaction']['TransactionConditions'] = [
+                "DebitPreferredFlag" => false
+            ];
+        } else {
+            $request['SaleToPOIRequest']['PaymentData'] = [
+                'PaymentType' => $transactionType,
+            ];
+
+        }
 
         $customerId = $this->getCustomerId($quote);
 

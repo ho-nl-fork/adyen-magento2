@@ -37,9 +37,10 @@ define(
         'Magento_Checkout/js/model/full-screen-loader',
         'Magento_Checkout/js/model/error-processor',
         'Magento_Ui/js/model/messages',
-        'Magento_Checkout/js/action/redirect-on-success'
+        'Magento_Checkout/js/action/redirect-on-success',
+        'Adyen_Payment/js/model/installments'
     ],
-    function (ko, $, Component, additionalValidators, placeOrderAction, quote, agreementsAssigner, customer, urlBuilder, storage, fullScreenLoader, errorProcessor, Messages, redirectOnSuccessAction) {
+    function (ko, $, Component, additionalValidators, placeOrderAction, quote, agreementsAssigner, customer, urlBuilder, storage, fullScreenLoader, errorProcessor, Messages, redirectOnSuccessAction, installmentsHelper) {
         'use strict';
 
         return Component.extend({
@@ -47,7 +48,34 @@ define(
             defaults: {
                 template: 'Adyen_Payment/payment/pos-cloud-form'
             },
+            initObservable: function () {
+                this._super()
+                    .observe([
+                        'terminalId',
+                        'installments',
+                        'installment'
+                    ]);
 
+                return this;
+            },
+            initialize: function () {
+                this._super();
+                let self = this;
+
+                // installments
+                let allInstallments = self.getAllInstallments();
+                let grandTotal = quote.totals().grand_total;
+                let precision = quote.getPriceFormat().precision;
+                let currencyCode = quote.totals().quote_currency_code;
+
+                let numberOfInstallments = installmentsHelper.getInstallmentsWithPrices(allInstallments, grandTotal, precision, currencyCode);
+
+                if (numberOfInstallments) {
+                    self.installments(numberOfInstallments);
+                } else {
+                    self.installments(0);
+                }
+            },
             initiate: function () {
                 var self = this,
                     serviceUrl,
@@ -57,19 +85,28 @@ define(
                 agreementsAssigner(paymentData);
                 serviceUrl = urlBuilder.createUrl('/adyen/initiate', {});
                 fullScreenLoader.startLoader();
+
+                let payload = {
+                    "payload": JSON.stringify({
+                        terminal_id: self.terminalId(),
+                        number_of_installments: self.installment()
+                    })
+                }
+
                 return storage.post(
-                    serviceUrl
+                    serviceUrl,
+                    JSON.stringify(payload)
                 ).always(function(){
                     self.placeOrderPos()});
                 return false;
             },
+
             posComplete: function () {
                 this.afterPlaceOrder();
                 if (this.redirectAfterPlaceOrder) {
                     redirectOnSuccessAction.execute();
                 }
             },
-
             placeOrderPos: function () {
                 var self = this;
                 return $.when(
@@ -91,12 +128,56 @@ define(
                     }
                 )
             },
+            getConnectedTerminals: function() {
+                let connectedTerminals = [];
+                const connectedTerminalsList = window.checkoutConfig.payment.adyenPos.connectedTerminals;
+
+                for (let i = 0; i < connectedTerminalsList.length; i++) {
+                    connectedTerminals.push(
+                        {
+                            key: connectedTerminalsList[i],
+                            value: connectedTerminalsList[i]
+                        }
+                    );
+                }
+
+                return connectedTerminals;
+            },
+            /**
+             * Get data for place order
+             * @returns {{method: *}}
+             */
+            getData: function () {
+                return {
+                    'method': this.item.method,
+                    additional_data: {
+                        'terminal_id': this.terminalId(),
+                        'number_of_installments': this.installment(),
+                    }
+                };
+            },
+            hasInstallments: function () {
+                return window.checkoutConfig.payment.adyenPos.hasInstallments;
+            },
+            getAllInstallments: function () {
+                return window.checkoutConfig.payment.adyenPos.installments;
+            },
             showLogo: function () {
                 return window.checkoutConfig.payment.adyen.showLogo;
             },
             validate: function () {
                 return true;
-            }
+            },
+            isActive: function () {
+                return true;
+            },
+            /**
+             * Returns state of place order button
+             * @returns {boolean}
+             */
+            isButtonActive: function () {
+                return this.isActive() && this.getCode() == this.isChecked() && this.getConnectedTerminals().length > 0 && this.validate();
+            },
         });
     }
 );

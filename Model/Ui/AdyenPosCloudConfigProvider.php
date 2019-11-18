@@ -44,21 +44,43 @@ class AdyenPosCloudConfigProvider implements ConfigProviderInterface
     protected $urlBuilder;
 
     /**
+     * @var \Adyen\Payment\Helper\PaymentMethods
+     */
+    protected $paymentMethodsHelper;
+
+    /**
+     * @var \Adyen\Payment\Helper\Data
+     */
+    protected $adyenHelper;
+
+    /**
+     * @var \Magento\Framework\Serialize\SerializerInterface
+     */
+    private $serializer;
+
+    /**
      * AdyenHppConfigProvider constructor.
      *
      * @param \Magento\Framework\App\RequestInterface $request
      * @param \Magento\Framework\UrlInterface $urlBuilder
+     * @param \Adyen\Payment\Helper\PaymentMethods $paymentMethodsHelper
      * @param \Adyen\Payment\Helper\Data $adyenHelper
      * @param \Magento\Checkout\Model\Session $checkoutSession
+     * @param \Magento\Framework\Serialize\SerializerInterface $serializer
      */
     public function __construct(
         \Magento\Framework\App\RequestInterface $request,
         \Magento\Framework\UrlInterface $urlBuilder,
+        \Adyen\Payment\Helper\PaymentMethods $paymentMethodsHelper,
         \Adyen\Payment\Helper\Data $adyenHelper,
-        \Magento\Checkout\Model\Session $checkoutSession
+        \Magento\Checkout\Model\Session $checkoutSession,
+        \Magento\Framework\Serialize\SerializerInterface $serializer
     ) {
         $this->request = $request;
         $this->urlBuilder = $urlBuilder;
+        $this->paymentMethodsHelper = $paymentMethodsHelper;
+        $this->adyenHelper = $adyenHelper;
+        $this->serializer = $serializer;
 
         $adyenHelper->setQuote($checkoutSession->getQuote());
     }
@@ -83,6 +105,24 @@ class AdyenPosCloudConfigProvider implements ConfigProviderInterface
             ]
         ];
 
+        if ($this->adyenHelper->getAdyenPosCloudConfigDataFlag("active")) {
+            $config['payment']['adyenPos']['connectedTerminals'] = $this->getConnectedTerminals();
+        }
+
+        // has installments by default false
+        $config['payment']['adyenPos']['hasInstallments'] = false;
+
+        // get Installments
+        $installmentsEnabled = $this->adyenHelper->getAdyenPosCloudConfigData('enable_installments');
+        $installments = $this->adyenHelper->getAdyenPosCloudConfigData('installments');
+
+        if ($installmentsEnabled && $installments) {
+            $config['payment']['adyenPos']['installments'] = $this->serializer->unserialize($installments);
+            $config['payment']['adyenPos']['hasInstallments'] = true;
+        } else {
+            $config['payment']['adyenPos']['installments'] = [];
+        }
+
         return $config;
     }
 
@@ -94,5 +134,20 @@ class AdyenPosCloudConfigProvider implements ConfigProviderInterface
     protected function getRequest()
     {
         return $this->request;
+    }
+
+    /**
+     * @return array|mixed
+     * @throws \Adyen\AdyenException
+     */
+    protected function getConnectedTerminals()
+    {
+        $connectedTerminals = $this->paymentMethodsHelper->getConnectedTerminals();
+
+        if (!empty($connectedTerminals['uniqueTerminalIds'])) {
+            return $connectedTerminals['uniqueTerminalIds'];
+        }
+
+        return [];
     }
 }

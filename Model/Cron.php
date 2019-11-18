@@ -255,6 +255,10 @@ class Cron
      * @var SubscriptionFinder
      */
     private $subscriptionFinder;
+    /**
+     * @var \Magento\Framework\Serialize\SerializerInterface
+     */
+    private $serializer;
 
     /**
      * Cron constructor.
@@ -314,7 +318,8 @@ class Cron
         PaymentTokenManagementInterface $paymentTokenManagement,
         OrderPaymentRepositoryInterface $orderPaymentRepository,
         VaultDetailsHandler $vaultDetailsHandler,
-        SubscriptionFinder $subscriptionFinder
+        SubscriptionFinder $subscriptionFinder,
+        \Magento\Framework\Serialize\SerializerInterface $serializer
     ) {
         $this->orderConfigProviderFactory = $orderConfigProviderFactory;
         $this->_adyenLogger = $adyenLogger;
@@ -343,6 +348,7 @@ class Cron
         $this->orderPaymentRepository = $orderPaymentRepository;
         $this->vaultDetailsHandler = $vaultDetailsHandler;
         $this->subscriptionFinder = $subscriptionFinder;
+        $this->serializer = $serializer;
     }
 
     /**
@@ -390,167 +396,174 @@ class Cron
         // loop over the notifications
         $count = 0;
         foreach ($notifications as $notification) {
-            $this->_adyenLogger->addAdyenNotificationCronjob(
-                sprintf("Processing notification %s", $notification->getEntityId())
-            );
-
-            // ignore duplicate notification
-            if ($this->_isDuplicate($notification)) {
+            try {
                 $this->_adyenLogger->addAdyenNotificationCronjob(
-                    "This is a duplicate notification and will be ignored"
+                    sprintf("Processing notification %s", $notification->getEntityId())
                 );
-                $this->_updateNotification($notification, false, true);
-                ++$count;
-                continue;
-            }
 
-            // log the executed notification
-            $this->_adyenLogger->addAdyenNotificationCronjob(print_r($notification->debug(), 1));
-
-            // get order
-            $incrementId = $notification->getMerchantReference();
-
-            $searchCriteria = $this->searchCriteriaBuilder
-                ->addFilter('increment_id', $incrementId, 'eq')
-                ->create();
-
-            $orderList = $this->orderRepository->getList($searchCriteria)->getItems();
-
-            /** @var \Magento\Sales\Model\Order $order */
-            $order = reset($orderList);
-            $this->_order = $order;
-
-            /**
-             * Process recurring contract notification with subscription ID as reference
-             * to create Vault tokens
-             */
-            if ($this->_adyenHelper->isCreditCardVaultEnabled()
-                && !$this->_order
-                && strpos($notification->getMerchantReference(), 'SUB') === 0
-                && $notification->getSuccess() === 'true'
-            ) {
-                if ($notification->getEventCode() == Notification::AUTHORISATION) {
-                    // Set as processed, keep the notification because
-                    // we need the additional data for the Vault token creation
-                    $this->_updateNotification($notification, false, true);
-                    continue;
-                }
-                elseif ($notification->getEventCode() == Notification::RECURRING_CONTRACT) {
-                    $this->_eventCode = $notification->getEventCode();
-                    $this->_paymentMethod = $notification->getPaymentMethod();
-                    $this->_pspReference = $notification->getPspReference();
-                    $this->_originalReference = $notification->getOriginalReference();
-
-                    // Retrieve original subscription order
-                    $subscriptionIncrementId = ltrim($notification->getMerchantReference(), 'SUB');
-                    $subscription = $this->subscriptionFinder->findByIncrementId($subscriptionIncrementId);
-                    $this->_order = $this->orderRepository->get($subscription['original_order_id']);
-
-                    $this->_processNotification();
-
-                    $this->_updateNotification($notification, false, true);
-
+                // ignore duplicate notification
+                if ($this->_isDuplicate($notification)) {
                     $this->_adyenLogger->addAdyenNotificationCronjob(
-                        sprintf("Subscription recurring contract notification %s is processed", $notification->getEntityId())
+                        "This is a duplicate notification and will be ignored"
                     );
+                    $this->_updateNotification($notification, false, true);
                     ++$count;
-
                     continue;
                 }
-            }
 
-            if (!$this->_order) {
-                // order does not exists remove from queue
-                $notification->delete();
-                continue;
-            }
+                // log the executed notification
+                $this->_adyenLogger->addAdyenNotificationCronjob(print_r($notification->debug(), 1));
 
-            // declare all variables that are needed
-            $this->_declareVariables($notification);
+                // get order
+                $incrementId = $notification->getMerchantReference();
 
-            // add notification to comment history status is current status
-            $this->_addStatusHistoryComment();
+                $searchCriteria = $this->searchCriteriaBuilder
+                    ->addFilter('increment_id', $incrementId, 'eq')
+                    ->create();
 
-            if ($notification->getEventCode() == Notification::AUTHORISATION
-                && $notification->getSuccess() == 'true'
-                && $this->_order->getStatus() == Order::STATE_CANCELED
-            ) {
-                // Reset cancelled order, so a new payment notification can be processed
-                // Can happen when the first payment fails and new payment is placed via payment link
-                $this->_order->setState(Order::STATE_NEW);
-                $this->_order->setStatus('pending');
+                $orderList = $this->orderRepository->getList($searchCriteria)->getItems();
 
-                foreach ($this->_order->getItems() as $item) {
-                    $item->setQtyCanceled(0);
+                /** @var \Magento\Sales\Model\Order $order */
+                $order = reset($orderList);
+                $this->_order = $order;
+
+                /**
+                 * Process recurring contract notification with subscription ID as reference
+                 * to create Vault tokens
+                 */
+                if ($this->_adyenHelper->isCreditCardVaultEnabled()
+                    && !$this->_order
+                    && strpos($notification->getMerchantReference(), 'SUB') === 0
+                    && $notification->getSuccess() === 'true'
+                ) {
+                    if ($notification->getEventCode() == Notification::AUTHORISATION) {
+                        // Set as processed, keep the notification because
+                        // we need the additional data for the Vault token creation
+                        $this->_updateNotification($notification, false, true);
+                        continue;
+                    }
+                    elseif ($notification->getEventCode() == Notification::RECURRING_CONTRACT) {
+                        $this->_eventCode = $notification->getEventCode();
+                        $this->_paymentMethod = $notification->getPaymentMethod();
+                        $this->_pspReference = $notification->getPspReference();
+                        $this->_originalReference = $notification->getOriginalReference();
+
+                        // Retrieve original subscription order
+                        $subscriptionIncrementId = ltrim($notification->getMerchantReference(), 'SUB');
+                        $subscription = $this->subscriptionFinder->findByIncrementId($subscriptionIncrementId);
+                        $this->_order = $this->orderRepository->get($subscription['original_order_id']);
+
+                        $this->_processNotification();
+
+                        $this->_updateNotification($notification, false, true);
+
+                        $this->_adyenLogger->addAdyenNotificationCronjob(
+                            sprintf("Subscription recurring contract notification %s is processed", $notification->getEntityId())
+                        );
+                        ++$count;
+
+                        continue;
+                    }
                 }
 
-                $this->_order->addStatusHistoryComment(__("Cancelled order is reset to status 'New', to process new authorisation notification"));
-                $this->_order->save();
-            }
+                if (!$this->_order) {
+                    // order does not exists remove from queue
+                    $notification->delete();
+                    continue;
+                }
 
-            $previousAdyenEventCode = $this->_order->getData('adyen_notification_event_code');
+                // declare all variables that are needed
+                $this->_declareVariables($notification);
 
-            // update order details
-            $this->_updateAdyenAttributes($notification);
+                // add notification to comment history status is current status
+                $this->_addStatusHistoryComment();
 
-            // check if success is true of false
-            if (strcmp($this->_success, 'false') == 0 || strcmp($this->_success, '0') == 0) {
-                /*
-                 * Only cancel the order when it is in state pending, payment review or
-                 * if the ORDER_CLOSED is failed (means split payment has not be successful)
-                 */
-                if ($this->_order->getState() === \Magento\Sales\Model\Order::STATE_PENDING_PAYMENT ||
-                    $this->_order->getState() === \Magento\Sales\Model\Order::STATE_PAYMENT_REVIEW ||
-                    $this->_eventCode == Notification::ORDER_CLOSED
+                if ($notification->getEventCode() == Notification::AUTHORISATION
+                    && $notification->getSuccess() == 'true'
+                    && $this->_order->getStatus() == Order::STATE_CANCELED
                 ) {
-                    $this->_adyenLogger->addAdyenNotificationCronjob('Going to cancel the order');
+                    // Reset cancelled order, so a new payment notification can be processed
+                    // Can happen when the first payment fails and new payment is placed via payment link
+                    $this->_order->setState(Order::STATE_NEW);
+                    $this->_order->setStatus('pending');
 
-                    // if payment is API check, check if API result pspreference is the same as reference
-                    if ($this->_eventCode == NOTIFICATION::AUTHORISATION && $this->_getPaymentMethodType() == 'api') {
-                        // don't cancel the order becasue order was successfull through api
-                        $this->_adyenLogger->addAdyenNotificationCronjob(
-                            'order is not cancelled because api result was succesfull'
-                        );
-                    } else {
-                        /*
-                         * don't cancel the order if previous state is authorisation with success=true
-                         * Split payments can fail if the second payment has failed the first payment is
-                         * refund/cancelled as well so if it is a split payment that failed cancel the order as well
-                         */
-                        if ($previousAdyenEventCode != "AUTHORISATION : TRUE" ||
-                            $this->_eventCode == Notification::ORDER_CLOSED
-                        ) {
-                            $this->_holdCancelOrder(false);
-                        } else {
-                            $this->_order->setData('adyen_notification_event_code', $previousAdyenEventCode);
+                    foreach ($this->_order->getItems() as $item) {
+                        $item->setQtyCanceled(0);
+                    }
+
+                    $this->_order->addStatusHistoryComment(__("Cancelled order is reset to status 'New', to process new authorisation notification"));
+                    $this->_order->save();
+                }
+
+                $previousAdyenEventCode = $this->_order->getData('adyen_notification_event_code');
+
+                // update order details
+                $this->_updateAdyenAttributes($notification);
+
+                // check if success is true of false
+                if (strcmp($this->_success, 'false') == 0 || strcmp($this->_success, '0') == 0) {
+                    /*
+                     * Only cancel the order when it is in state pending, payment review or
+                     * if the ORDER_CLOSED is failed (means split payment has not be successful)
+                     */
+                    if ($this->_order->getState() === \Magento\Sales\Model\Order::STATE_PENDING_PAYMENT ||
+                        $this->_order->getState() === \Magento\Sales\Model\Order::STATE_PAYMENT_REVIEW ||
+                        $this->_eventCode == Notification::ORDER_CLOSED
+                    ) {
+                        $this->_adyenLogger->addAdyenNotificationCronjob('Going to cancel the order');
+
+                        // if payment is API check, check if API result pspreference is the same as reference
+                        if ($this->_eventCode == NOTIFICATION::AUTHORISATION && $this->_getPaymentMethodType() == 'api') {
+                            // don't cancel the order becasue order was successfull through api
                             $this->_adyenLogger->addAdyenNotificationCronjob(
-                                'order is not cancelled because previous notification 
-                                was an authorisation that succeeded'
+                                'order is not cancelled because api result was succesfull'
                             );
+                        } else {
+                            /*
+                             * don't cancel the order if previous state is authorisation with success=true
+                             * Split payments can fail if the second payment has failed the first payment is
+                             * refund/cancelled as well so if it is a split payment that failed cancel the order as well
+                             */
+                            if ($previousAdyenEventCode != "AUTHORISATION : TRUE" ||
+                                $this->_eventCode == Notification::ORDER_CLOSED
+                            ) {
+                                $this->_holdCancelOrder(false);
+                            } else {
+                                $this->_order->setData('adyen_notification_event_code', $previousAdyenEventCode);
+                                $this->_adyenLogger->addAdyenNotificationCronjob(
+                                    'order is not cancelled because previous notification
+                                    was an authorisation that succeeded'
+                                );
+                            }
                         }
+                    } else {
+                        $this->_adyenLogger->addAdyenNotificationCronjob(
+                            'Order is already processed so ignore this notification state is:' . $this->_order->getState()
+                        );
                     }
                 } else {
-                    $this->_adyenLogger->addAdyenNotificationCronjob(
-                        'Order is already processed so ignore this notification state is:' . $this->_order->getState()
-                    );
+                    // Notification is successful
+                    $this->_processNotification();
                 }
-            } else {
-                // Notification is successful
-                $this->_processNotification();
-            }
 
-            try {
-                // set done to true
-                $this->_order->save();
+                try {
+                    // set done to true
+                    $this->_order->save();
+                } catch (\Exception $e) {
+                    $this->_adyenLogger->addAdyenNotificationCronjob($e->getMessage());
+                }
+
+                $this->_updateNotification($notification, false, true);
+                $this->_adyenLogger->addAdyenNotificationCronjob(
+                    sprintf("Notification %s is processed", $notification->getEntityId())
+                );
+                ++$count;
             } catch (\Exception $e) {
-                $this->_adyenLogger->addAdyenNotificationCronjob($e->getMessage());
+                $this->_updateNotification($notification, false, false);
+                $this->_adyenLogger->addAdyenNotificationCronjob(
+                    sprintf("Notification %s had an error: %s \n %s", $notification->getEntityId(), $e->getMessage(), $e->getTraceAsString())
+                );
             }
-
-            $this->_updateNotification($notification, false, true);
-            $this->_adyenLogger->addAdyenNotificationCronjob(
-                sprintf("Notification %s is processed", $notification->getEntityId())
-            );
-            ++$count;
         }
 
         if ($count > 0) {
@@ -608,8 +621,7 @@ class Cron
         $this->_reason = $notification->getPaymentMethod();
         $this->_value = $notification->getAmountValue();
 
-
-        $additionalData = unserialize($notification->getAdditionalData());
+        $additionalData = !empty($notification->getAdditionalData()) ? $this->serializer->unserialize($notification->getAdditionalData()) : "";
 
         // boleto data
         if ($this->_paymentMethodCode() == "adyen_boleto") {
@@ -779,7 +791,8 @@ class Cron
     {
         $this->_adyenLogger->addAdyenNotificationCronjob('Updating the Adyen attributes of the order');
 
-        $additionalData = unserialize($notification->getAdditionalData());
+        $additionalData = !empty($notification->getAdditionalData()) ? $this->serializer->unserialize($notification->getAdditionalData()) : "";
+
         $_paymentCode = $this->_paymentMethodCode();
 
         if ($this->_eventCode == Notification::AUTHORISATION
@@ -1704,6 +1717,15 @@ class Cron
             case 'laser':
             case 'paypal':
             case 'sepadirectdebit':
+            case 'dankort':
+            case 'elo':
+            case 'hipercard':
+            case 'mc_applepay':
+            case 'visa_applepay':
+            case 'amex_applepay':
+            case 'discover_applepay':
+            case 'maestro_applepay':
+            case 'paywithgoogle':
                 $manualCaptureAllowed = true;
                 break;
             default:

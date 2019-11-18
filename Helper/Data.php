@@ -35,10 +35,8 @@ class Data extends AbstractHelper
     const MODULE_NAME = 'adyen-magento2';
     const TEST = 'test';
     const LIVE = 'live';
-    const CHECKOUT_CONTEXT_URL_LIVE = 'https://checkoutshopper-live.adyen.com/checkoutshopper/';
-    const CHECKOUT_CONTEXT_URL_TEST = 'https://checkoutshopper-test.adyen.com/checkoutshopper/';
-    const CHECKOUT_COMPONENT_JS_LIVE = 'https://checkoutshopper-live.adyen.com/checkoutshopper/sdk/2.5.0/adyen.js';
-    const CHECKOUT_COMPONENT_JS_TEST = 'https://checkoutshopper-test.adyen.com/checkoutshopper/sdk/2.5.0/adyen.js';
+    const CHECKOUT_COMPONENT_JS_LIVE = 'https://checkoutshopper-live.adyen.com/checkoutshopper/sdk/3.2.0/adyen.js';
+    const CHECKOUT_COMPONENT_JS_TEST = 'https://checkoutshopper-test.adyen.com/checkoutshopper/sdk/3.2.0/adyen.js';
 
     /**
      * @var \Magento\Framework\Encryption\EncryptorInterface
@@ -143,6 +141,21 @@ class Data extends AbstractHelper
     private $config;
 
     /**
+     * @var \Magento\Backend\Helper\Data $helperBackend
+     */
+    private $helperBackend;
+
+    /**
+     * @var \Magento\Framework\Serialize\SerializerInterface
+     */
+    private $serializer;
+
+    /**
+     * @var \Magento\Framework\Component\ComponentRegistrarInterface
+     */
+    private $componentRegistrar;
+
+    /**
      * Data constructor.
      * @param \Magento\Framework\App\Helper\Context $context
      * @param \Magento\Framework\Encryption\EncryptorInterface $encryptor
@@ -161,6 +174,10 @@ class Data extends AbstractHelper
      * @param \Magento\Framework\App\CacheInterface $cache
      * @param \Adyen\Payment\Model\Billing\AgreementFactory $billingAgreementFactory
      * @param \Adyen\Payment\Model\ResourceModel\Billing\Agreement $agreementResourceModel
+     * @param \Magento\Framework\Locale\ResolverInterface $localeResolver
+     * @param \Magento\Framework\App\Config\ScopeConfigInterface $config
+     * @param \Magento\Backend\Helper\Data $helperBackend
+     * @param \Magento\Framework\Serialize\SerializerInterface $serializer
      */
     public function __construct(
         \Magento\Framework\App\Helper\Context $context,
@@ -183,7 +200,10 @@ class Data extends AbstractHelper
         QuoteConfigProviderFactoryInterface $quoteConfigProviderFactory,
         OrderConfigProviderFactoryInterface $orderConfigProviderFactory,
         \Magento\Framework\Locale\ResolverInterface $localeResolver,
-        \Magento\Framework\App\Config\ScopeConfigInterface $config
+        \Magento\Framework\App\Config\ScopeConfigInterface $config,
+        \Magento\Backend\Helper\Data $helperBackend,
+        \Magento\Framework\Serialize\SerializerInterface $serializer,
+        \Magento\Framework\Component\ComponentRegistrarInterface $componentRegistrar
     ) {
         parent::__construct($context);
         $this->_encryptor = $encryptor;
@@ -206,6 +226,9 @@ class Data extends AbstractHelper
         $this->orderConfigProviderFactory = $orderConfigProviderFactory;
         $this->localeResolver = $localeResolver;
         $this->config = $config;
+        $this->helperBackend = $helperBackend;
+        $this->serializer = $serializer;
+        $this->componentRegistrar = $componentRegistrar;
     }
 
     /**
@@ -257,53 +280,57 @@ class Data extends AbstractHelper
         ];
     }
 
-
     /**
-     * Return the formatted currency. Adyen accepts the currency in multiple formats.
-     * @param $amount
+     * Return the number of decimals for the specified currency
      * @param $currency
-     * @return string
+     * @return int
      */
-    public function formatAmount($amount, $currency)
+    public function decimalNumbers($currency)
     {
         switch ($currency) {
-            case "JPY":
-            case "IDR":
-            case "KRW":
-            case "BYR":
-            case "VND":
             case "CVE":
             case "DJF":
             case "GNF":
+            case "IDR":
+            case "JPY":
+            case "KMF":
+            case "KRW":
             case "PYG":
             case "RWF":
             case "UGX":
+            case "VND":
             case "VUV":
             case "XAF":
             case "XOF":
             case "XPF":
-            case "GHC":
-            case "KMF":
                 $format = 0;
                 break;
-            case "MRO":
-                $format = 1;
-                break;
             case "BHD":
+            case "IQD":
             case "JOD":
             case "KWD":
-            case "OMR":
             case "LYD":
+            case "OMR":
             case "TND":
                 $format = 3;
                 break;
             default:
                 $format = 2;
-                break;
         }
-
-        return (int)number_format($amount, $format, '', '');
+        return $format;
     }
+
+    /**
+     * Return the formatted amount. Adyen accepts the currency in multiple formats.
+     * @param $amount
+     * @param $currency
+     * @return int
+     */
+    public function formatAmount($amount, $currency)
+    {
+        return (int)number_format($amount, $this->decimalNumbers($currency), '', '');
+    }
+
 
     /**
      * Tax Percentage needs to be in minor units for Adyen
@@ -382,19 +409,19 @@ class Data extends AbstractHelper
         return (['name' => trim($streetName), 'house_number' => $streetNr]);
     }
 
-	/**
-	 * Street format
-	 * @param string $streetLine
-	 * @return array
-	 */
-	public function getStreetFromString($streetLine)
-	{
-		$street = self::formatStreet([$streetLine]);
-		$streetName = $street['0'];
-		unset($street['0']);
-		$streetNr = implode(' ', $street);
-		return (['name' => trim($streetName), 'house_number' => $streetNr]);
-	}
+    /**
+     * Street format
+     * @param string $streetLine
+     * @return array
+     */
+    public function getStreetFromString($streetLine)
+    {
+        $street = self::formatStreet([$streetLine]);
+        $streetName = $street['0'];
+        unset($street['0']);
+        $streetNr = implode(' ', $street);
+        return (['name' => trim($streetName), 'house_number' => $streetNr]);
+    }
 
     /**
      * Fix this one string street + number
@@ -407,6 +434,9 @@ class Data extends AbstractHelper
         if (count($street) != 1) {
             return $street;
         }
+
+        $street['0'] = trim($street['0']);
+
         preg_match('/((\s\d{0,10})|(\s\d{0,10}\w{1,3}))$/i', $street['0'], $houseNumber, PREG_OFFSET_CAPTURE);
         if (!empty($houseNumber['0'])) {
             $_houseNumber = trim($houseNumber['0']['0']);
@@ -476,18 +506,6 @@ class Data extends AbstractHelper
     public function getAdyenCcVaultConfigDataFlag($field, $storeId = null)
     {
         return $this->getConfigData($field, 'adyen_cc_vault', $storeId, true);
-    }
-
-    /**
-     * Gives back adyen_cc_threeds2 configuration values as flag
-     *
-     * @param $field
-     * @param null $storeId
-     * @return mixed
-     */
-    public function getAdyenCcThreeDS2ConfigDataFlag($field, $storeId = null)
-    {
-        return $this->getConfigData($field, 'adyen_cc_threeds2', $storeId, true);
     }
 
     /**
@@ -647,6 +665,39 @@ class Data extends AbstractHelper
     }
 
     /**
+     * Gives back adyen_google_pay configuration values
+     *
+     * @param $field
+     * @param null $storeId
+     * @return mixed
+     */
+    public function getAdyenGooglePayConfigData($field, $storeId = null)
+    {
+        return $this->getConfigData($field, 'adyen_google_pay', $storeId);
+    }
+
+    /**
+     * Gives back adyen_google_pay configuration values
+     *
+     * @param $field
+     * @param null $storeId
+     * @return mixed
+     */
+    public function isAdyenGooglePayEnabled($storeId = null)
+    {
+        return $this->getAdyenGooglePayConfigData('active', $storeId);
+    }
+
+    /**
+     * @param null $storeId
+     * @return mixed
+     */
+    public function getAdyenGooglePayMerchantIdentifier($storeId = null)
+    {
+        return $this->getAdyenGooglePayConfigData('merchant_identifier', $storeId);
+    }
+
+    /**
      * Retrieve decrypted hmac key
      *
      * @return string
@@ -707,11 +758,15 @@ class Data extends AbstractHelper
     public function getAPIKey($storeId = null)
     {
         if ($this->isDemoMode($storeId)) {
-            $apiKey = $this->_encryptor->decrypt(trim($this->getAdyenAbstractConfigData('api_key_test',
-                $storeId)));
+            $apiKey = $this->_encryptor->decrypt(trim($this->getAdyenAbstractConfigData(
+                'api_key_test',
+                $storeId
+            )));
         } else {
-            $apiKey = $this->_encryptor->decrypt(trim($this->getAdyenAbstractConfigData('api_key_live',
-                $storeId)));
+            $apiKey = $this->_encryptor->decrypt(trim($this->getAdyenAbstractConfigData(
+                'api_key_live',
+                $storeId
+            )));
         }
         return $apiKey;
     }
@@ -892,13 +947,22 @@ class Data extends AbstractHelper
     }
 
     /**
-     * Get adyen magento module's version
+     * Get adyen magento module's version from composer.json
      *
      * @return string
      */
     public function getModuleVersion()
     {
-        return (string)$this->_moduleList->getOne("Adyen_Payment")['setup_version'];
+        $moduleDir = $this->componentRegistrar->getPath(\Magento\Framework\Component\ComponentRegistrar::MODULE, 'Adyen_Payment');
+
+        $composerJson = file_get_contents($moduleDir . '/composer.json');
+        $composerJson = json_decode($composerJson, true);
+
+        if (empty($composerJson['version'])) {
+            return "Version is not available in composer.json";
+        }
+
+        return $composerJson['version'];
     }
 
     public function getBoletoTypes()
@@ -990,7 +1054,7 @@ class Data extends AbstractHelper
                     $installments = null;
                     $installmentsValue = $this->getAdyenCcConfigData('installments');
                     if ($installmentsValue) {
-                        $installments = unserialize($installmentsValue);
+                        $installments = $this->serializer->unserialize($installmentsValue);
                     }
 
                     if ($installments) {
@@ -1038,18 +1102,31 @@ class Data extends AbstractHelper
         return false;
     }
 
-	/**
-	 * @param $paymentMethod
-	 * @return bool
-	 */
-	public function isPaymentMethodAfterpayTouchMethod($paymentMethod)
-	{
-		if (strpos($paymentMethod, 'afterpaytouch') !== false) {
-			return true;
-		}
+    /**
+     * @param $paymentMethod
+     * @return bool
+     */
+    public function isPaymentMethodRatepayMethod($paymentMethod)
+    {
+        if (strpos($paymentMethod, 'ratepay') !== false) {
+            return true;
+        }
 
-		return false;
-	}
+        return false;
+    }
+
+    /**
+     * @param $paymentMethod
+     * @return bool
+     */
+    public function isPaymentMethodAfterpayTouchMethod($paymentMethod)
+    {
+        if (strpos($paymentMethod, 'afterpaytouch') !== false) {
+            return true;
+        }
+
+        return false;
+    }
 
     /**
      * @param $paymentMethod
@@ -1425,14 +1502,14 @@ class Data extends AbstractHelper
     }
 
     /**
-     * Return the Terminal ID for the current store/mode
+     * Return the Store ID for the current store/mode
      *
      * @param int|null $storeId
      * @return mixed
      */
-    public function getPoiId($storeId = null)
+    public function getPosStoreId($storeId = null)
     {
-        return $this->getAdyenPosCloudConfigData('pos_terminal_id', $storeId);
+        return $this->getAdyenPosCloudConfigData('pos_store_id', $storeId);
     }
 
     /**
@@ -1552,10 +1629,19 @@ class Data extends AbstractHelper
     /**
      * @return string
      */
-    public function getOrigin() {
+    public function getOrigin()
+    {
+        $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
+        $state = $objectManager->get('Magento\Framework\App\State');
         $baseUrl = $this->storeManager->getStore()->getBaseUrl(\Magento\Framework\UrlInterface::URL_TYPE_WEB);
+        if ('adminhtml' === $state->getAreaCode()) {
+            $baseUrl =  $this->helperBackend->getHomePageUrl();
+        }
         $parsed = parse_url($baseUrl);
         $origin = $parsed['scheme'] . "://" . $parsed['host'];
+        if (!empty($parsed['port'])) {
+            $origin .= ":" . $parsed['port'];
+        }
         return $origin;
     }
 
@@ -1618,13 +1704,13 @@ class Data extends AbstractHelper
      * @param int|null $storeId
      * @return string
      */
-    public function getCheckoutContextUrl($storeId = null)
+    public function getCheckoutEnvironment($storeId = null)
     {
         if ($this->isDemoMode($storeId)) {
-            return self::CHECKOUT_CONTEXT_URL_TEST;
+            return self::TEST;
         }
 
-        return self::CHECKOUT_CONTEXT_URL_LIVE;
+        return self::LIVE;
     }
 
     /**
@@ -1673,13 +1759,17 @@ class Data extends AbstractHelper
                     if ($billingAgreement->getCustomerId() === null) {
                         $billingAgreement->setCustomerId($this->getCustomerId($order));
                     }
-                    $message = __('Created billing agreement #%1.',
-                        $additionalData['recurring.recurringDetailReference']);
+                    $message = __(
+                        'Created billing agreement #%1.',
+                        $additionalData['recurring.recurringDetailReference']
+                    );
                 } else {
 
                     $billingAgreement->setIsObjectChanged(true);
-                    $message = __('Updated billing agreement #%1.',
-                        $additionalData['recurring.recurringDetailReference']);
+                    $message = __(
+                        'Updated billing agreement #%1.',
+                        $additionalData['recurring.recurringDetailReference']
+                    );
                 }
 
                 // Populate billing agreement data
@@ -1690,8 +1780,10 @@ class Data extends AbstractHelper
 
                 if ($billingAgreement->isValid() && empty($billingAgreementErrors)) {
 
-                    if (!$this->agreementResourceModel->getOrderRelation($billingAgreement->getAgreementId(),
-                        $order->getId())) {
+                    if (!$this->agreementResourceModel->getOrderRelation(
+                        $billingAgreement->getAgreementId(),
+                        $order->getId()
+                    )) {
 
                         // save into sales_billing_agreement_order
                         $billingAgreement->addOrderRelation($order);
@@ -1699,8 +1791,10 @@ class Data extends AbstractHelper
                     // add to order to save agreement
                     $order->addRelatedObject($billingAgreement);
                 } else {
-                    $message = __('Failed to create billing agreement for this order. Reason(s): ') . join(', ',
-                            $billingAgreementErrors);
+                    $message = __('Failed to create billing agreement for this order. Reason(s): ') . join(
+                        ', ',
+                        $billingAgreementErrors
+                    );
                     throw new \Exception($message);
                 }
 
@@ -1796,41 +1890,41 @@ class Data extends AbstractHelper
      */
     public function isCreditCardThreeDS2Enabled($storeId = null)
     {
-        return $this->getAdyenCcThreeDS2ConfigDataFlag('active', $storeId);
+        return $this->getAdyenCcConfigDataFlag('threeds2_enabled', $storeId);
     }
 
-	/**
-	 * @param $client
-	 * @return \Adyen\Service\Checkout
-	 */
-	public function createAdyenCheckoutService($client)
-	{
-		return new \Adyen\Service\Checkout($client);
-	}
+    /**
+     * @param $client
+     * @return \Adyen\Service\Checkout
+     */
+    public function createAdyenCheckoutService($client)
+    {
+        return new \Adyen\Service\Checkout($client);
+    }
 
-	/**
-	 * @param $client
-	 * @return \Adyen\Service\Recurring
-	 * @throws \Adyen\AdyenException
-	 */
-	public function createAdyenRecurringService($client)
-	{
-		return new \Adyen\Service\Recurring($client);
-	}
+    /**
+     * @param $client
+     * @return \Adyen\Service\Recurring
+     * @throws \Adyen\AdyenException
+     */
+    public function createAdyenRecurringService($client)
+    {
+        return new \Adyen\Service\Recurring($client);
+    }
 
-	/**
-	 * @param string $date
-	 * @param string $format
-	 * @return mixed
-	 */
-	public function formatDate($date = null, $format = 'Y-m-d H:i:s')
-	{
-		if (strlen($date) < 0) {
-			$date = date('d-m-Y H:i:s');
-		}
-		$timeStamp = new \DateTime($date);
-		return $timeStamp->format($format);
-	}
+    /**
+     * @param string $date
+     * @param string $format
+     * @return mixed
+     */
+    public function formatDate($date = null, $format = 'Y-m-d H:i:s')
+    {
+        if (strlen($date) < 0) {
+            $date = date('d-m-Y H:i:s');
+        }
+        $timeStamp = new \DateTime($date);
+        return $timeStamp->format($format);
+    }
 
     /**
      * @param string|null $type
@@ -1841,12 +1935,13 @@ class Data extends AbstractHelper
     {
         $response = ['threeDS2' => false];
 
+        if (!empty($type)) {
+            $response['type'] =  $type;
+        }
+
         if ($type && $token) {
-            $response = [
-                "threeDS2" => true,
-                "type" => $type,
-                "token" => $token
-            ];
+            $response['threeDS2'] = true;
+            $response['token'] = $token;
         }
 
         return json_encode($response);

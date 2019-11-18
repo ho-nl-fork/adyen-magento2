@@ -251,7 +251,7 @@ class Result extends \Magento\Framework\App\Action\Action
                 break;
 			case Notification::RECEIVED:
 				$result = true;
-                if (strpos($paymentMethod, "alipay_hk_web") !== false) {
+                if (strpos($paymentMethod, "alipay_hk") !== false) {
                     $result = false;
                 }
 				$this->_adyenLogger->addAdyenResult('Do nothing wait for the notification');
@@ -303,7 +303,7 @@ class Result extends \Magento\Framework\App\Action\Action
     }
     
     /**
-     * Authenticate using sha1 Merchant signature
+     * Authenticate using sha256 Merchant signature
      *
      * @param $response
      * @return bool
@@ -384,7 +384,10 @@ class Result extends \Magento\Framework\App\Action\Action
 
         $request = [];
 
-		if (!empty($this->_session->getLastRealOrder()->getPayment()->getAdditionalInformation("paymentData"))) {
+        if (!empty($this->_session->getLastRealOrder()) &&
+            !empty($this->_session->getLastRealOrder()->getPayment()) &&
+            !empty($this->_session->getLastRealOrder()->getPayment()->getAdditionalInformation("paymentData"))
+        ) {
             $request['paymentData'] = $this->_session->getLastRealOrder()->getPayment()->getAdditionalInformation("paymentData");
         }
 
