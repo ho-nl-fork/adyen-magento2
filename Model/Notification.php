@@ -49,6 +49,7 @@ class Notification extends \Magento\Framework\Model\AbstractModel implements Not
     const REPORT_AVAILABLE = "REPORT_AVAILABLE";
     const ORDER_CLOSED = "ORDER_CLOSED";
     const OFFER_CLOSED = "OFFER_CLOSED";
+    const CHARGEBACK = "CHARGEBACK";
 
     /**
      * Notification constructor.
