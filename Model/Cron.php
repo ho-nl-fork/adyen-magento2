@@ -1712,14 +1712,14 @@ class Cron
                 $this->_getConfigData(
                     'capture_mode',
                     'adyen_abstract',
-                    $this->_order->getStoreId()
+                    $this->_order
                 )
             );
             $sepaFlow = trim(
                 $this->_getConfigData(
                     'sepa_flow',
                     'adyen_abstract',
-                    $this->_order->getStoreId()
+                    $this->_order
                 )
             );
             $_paymentCode = $this->_paymentMethodCode();
@@ -1732,7 +1732,7 @@ class Cron
                 $this->_getConfigData(
                     'paypal_capture_mode',
                     'adyen_abstract',
-                    $this->_order->getStoreId()
+                    $this->_order
                 )
             );
 
