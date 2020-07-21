@@ -26,7 +26,6 @@ namespace Adyen\Payment\Model;
 
 use Adyen\Payment\Api\AdyenInitiateTerminalApiInterface;
 use Adyen\Payment\Model\Ui\AdyenPosCloudConfigProvider;
-use Adyen\Util\Util;
 use Magento\Quote\Model\Quote;
 
 class AdyenInitiateTerminalApi implements AdyenInitiateTerminalApiInterface
@@ -57,22 +56,33 @@ class AdyenInitiateTerminalApi implements AdyenInitiateTerminalApiInterface
     protected $checkoutSession;
 
     /**
+     * @var \Magento\Framework\App\ProductMetadataInterface
+     */
+    protected $productMetadata;
+
+    /**
      * AdyenInitiateTerminalApi constructor.
+     *
      * @param \Adyen\Payment\Helper\Data $adyenHelper
      * @param \Adyen\Payment\Logger\AdyenLogger $adyenLogger
-     * @param \Magento\Checkout\Model\Session $_checkoutSession
+     * @param \Magento\Checkout\Model\Session $checkoutSession
+     * @param \Magento\Store\Model\StoreManagerInterface $storeManager
+     * @param \Magento\Framework\App\ProductMetadataInterface $productMetadata
      * @param array $data
+     * @throws \Adyen\AdyenException
      */
     public function __construct(
         \Adyen\Payment\Helper\Data $adyenHelper,
         \Adyen\Payment\Logger\AdyenLogger $adyenLogger,
         \Magento\Checkout\Model\Session $checkoutSession,
         \Magento\Store\Model\StoreManagerInterface $storeManager,
+        \Magento\Framework\App\ProductMetadataInterface $productMetadata,
         array $data = []
     ) {
         $this->adyenHelper = $adyenHelper;
         $this->adyenLogger = $adyenLogger;
         $this->checkoutSession = $checkoutSession;
+        $this->productMetadata = $productMetadata;
         $this->storeId = $storeManager->getStore()->getId();
 
         // initialize client
@@ -90,6 +100,7 @@ class AdyenInitiateTerminalApi implements AdyenInitiateTerminalApiInterface
 
     /**
      * Trigger sync call on terminal
+     *
      * @return mixed
      * @throws \Exception
      */
@@ -100,7 +111,9 @@ class AdyenInitiateTerminalApi implements AdyenInitiateTerminalApiInterface
 
         // Validate JSON that has just been parsed if it was in a valid format
         if (json_last_error() !== JSON_ERROR_NONE) {
-            throw new \Magento\Framework\Exception\LocalizedException(__('Terminal API initiate request was not a valid JSON'));
+            throw new \Magento\Framework\Exception\LocalizedException(
+                __('Terminal API initiate request was not a valid JSON')
+            );
         }
 
         if (empty($payload['terminal_id'])) {
@@ -132,7 +145,7 @@ class AdyenInitiateTerminalApi implements AdyenInitiateTerminalApiInterface
                             'SaleID' => 'Magento2Cloud',
                             'POIID' => $poiId,
                             'ProtocolVersion' => '3.0',
-                            'ServiceID' => $serviceID,
+                            'ServiceID' => $serviceID
                         ],
                     'PaymentRequest' =>
                         [
@@ -142,19 +155,19 @@ class AdyenInitiateTerminalApi implements AdyenInitiateTerminalApiInterface
                                     'SaleTransactionID' =>
                                         [
                                             'TransactionID' => $reference,
-                                            'TimeStamp' => $timeStamper,
-                                        ],
+                                            'TimeStamp' => $timeStamper
+                                        ]
                                 ],
                             'PaymentTransaction' =>
                                 [
                                     'AmountsReq' =>
                                         [
                                             'Currency' => $quote->getCurrency()->getQuoteCurrencyCode(),
-                                            'RequestedAmount' => doubleval($quote->getGrandTotal()),
-                                        ],
-                                ],
-                        ],
-                ],
+                                            'RequestedAmount' => doubleval($quote->getGrandTotal())
+                                        ]
+                                ]
+                        ]
+                ]
         ];
 
         if (!empty($payload['number_of_installments'])) {
@@ -176,25 +189,9 @@ class AdyenInitiateTerminalApi implements AdyenInitiateTerminalApiInterface
             $request['SaleToPOIRequest']['PaymentData'] = [
                 'PaymentType' => $transactionType,
             ];
-
         }
 
-        $customerId = $this->getCustomerId($quote);
-
-        // If customer exists add it into the request to store request
-        if (!empty($customerId)) {
-            $shopperEmail = $quote->getCustomerEmail();
-            $recurringContract = $this->adyenHelper->getAdyenPosCloudConfigData('recurring_type', $this->storeId);
-
-            if (!empty($recurringContract) && !empty($shopperEmail)) {
-                $recurringDetails = [
-                    'shopperEmail' => $shopperEmail,
-                    'shopperReference' => strval($customerId),
-                    'recurringContract' => $recurringContract
-                ];
-                $request['SaleToPOIRequest']['PaymentRequest']['SaleData']['SaleToAcquirerData'] = http_build_query($recurringDetails);
-            }
-        }
+        $request = $this->addSaleToAcquirerData($request, $quote);
 
         $quote->getPayment()->getMethodInstance()->getInfoInstance()->setAdditionalInformation(
             'serviceID',
@@ -231,14 +228,53 @@ class AdyenInitiateTerminalApi implements AdyenInitiateTerminalApiInterface
     }
 
     /**
-	 * This getter makes it possible to overwrite the customer id from other plugins
-	 * Use this function to get the customer id so we can keep using this plugin in the UCD
-	 *
+     * This getter makes it possible to overwrite the customer id from other plugins
+     * Use this function to get the customer id so we can keep using this plugin in the UCD
+     *
      * @param Quote $quote
      * @return mixed
      */
     public function getCustomerId(Quote $quote)
     {
         return $quote->getCustomerId();
+    }
+
+    /**
+     * Add SaleToAcquirerData for storing for recurring transactions and able to track platform and version
+     * When upgrading to new version of library we can use the client methods
+     *
+     * @param $request
+     * @param $quote
+     * @return mixed
+     */
+    public function addSaleToAcquirerData($request, $quote)
+    {
+        $customerId = $this->getCustomerId($quote);
+
+        $saleToAcquirerData = [];
+
+        // If customer exists add it into the request to store request
+        if (!empty($customerId)) {
+            $shopperEmail = $quote->getCustomerEmail();
+            $recurringContract = $this->adyenHelper->getAdyenPosCloudConfigData('recurring_type', $this->storeId);
+
+            if (!empty($recurringContract) && !empty($shopperEmail)) {
+                $saleToAcquirerData['shopperEmail'] = $shopperEmail;
+                $saleToAcquirerData['shopperReference'] = (string)$customerId;
+                $saleToAcquirerData['recurringContract'] = $recurringContract;
+            }
+        }
+
+        $saleToAcquirerData[ApplicationInfo::APPLICATION_INFO][ApplicationInfo::MERCHANT_APPLICATION]
+        [ApplicationInfo::VERSION] = $this->adyenHelper->getModuleVersion();
+        $saleToAcquirerData[ApplicationInfo::APPLICATION_INFO][ApplicationInfo::MERCHANT_APPLICATION]
+        [ApplicationInfo::NAME] = $this->adyenHelper->getModuleName();
+        $saleToAcquirerData[ApplicationInfo::APPLICATION_INFO][ApplicationInfo::EXTERNAL_PLATFORM]
+        [ApplicationInfo::VERSION] = $this->productMetadata->getVersion();
+        $saleToAcquirerData[ApplicationInfo::APPLICATION_INFO][ApplicationInfo::EXTERNAL_PLATFORM]
+        [ApplicationInfo::NAME] = $this->productMetadata->getName();
+        $saleToAcquirerDataBase64 = base64_encode(json_encode($saleToAcquirerData));
+        $request['SaleToPOIRequest']['PaymentRequest']['SaleData']['SaleToAcquirerData'] = $saleToAcquirerDataBase64;
+        return $request;
     }
 }

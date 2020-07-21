@@ -20,15 +20,13 @@
  *
  * Author: Adyen <magento@adyen.com>
  */
+
 namespace Adyen\Payment\Observer;
 
 use Magento\Framework\Event\Observer;
 use Magento\Payment\Observer\AbstractDataAssignObserver;
 use Magento\Quote\Api\Data\PaymentInterface;
 
-/**
- * Class DataAssignObserver
- */
 class AdyenCcDataAssignObserver extends AbstractDataAssignObserver
 {
     const CC_TYPE = 'cc_type';
@@ -47,6 +45,7 @@ class AdyenCcDataAssignObserver extends AbstractDataAssignObserver
     const TIMEZONE_OFFSET = 'timezone_offset';
     const LANGUAGE = 'language';
     const GUEST_EMAIL = 'guestEmail';
+    const COMBO_CARD_TYPE = 'combo_card_type';
 
     /**
      * @var array
@@ -67,7 +66,8 @@ class AdyenCcDataAssignObserver extends AbstractDataAssignObserver
         self::SCREEN_HEIGHT,
         self::TIMEZONE_OFFSET,
         self::LANGUAGE,
-        self::GUEST_EMAIL
+        self::GUEST_EMAIL,
+        self::COMBO_CARD_TYPE
     ];
 
     /**

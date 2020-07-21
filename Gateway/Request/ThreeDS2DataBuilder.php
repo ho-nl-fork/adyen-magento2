@@ -51,7 +51,6 @@ class ThreeDS2DataBuilder implements BuilderInterface
         $this->adyenRequestsHelper = $adyenRequestsHelper;
     }
 
-
     /**
      * @param array $buildSubject
      * @return array
@@ -62,8 +61,13 @@ class ThreeDS2DataBuilder implements BuilderInterface
         /** @var \Magento\Payment\Gateway\Data\PaymentDataObject $paymentDataObject */
         $paymentDataObject = \Magento\Payment\Gateway\Helper\SubjectReader::readPayment($buildSubject);
         $payment = $paymentDataObject->getPayment();
+        $order = $paymentDataObject->getOrder();
         $additionalInformation = $payment->getAdditionalInformation();
-        $request['body'] = $this->adyenRequestsHelper->buildThreeDS2Data([], $additionalInformation);
+        $request['body'] = $this->adyenRequestsHelper->buildThreeDS2Data(
+            $additionalInformation,
+            $order->getStoreId(),
+            []
+        );
         return $request;
     }
 }

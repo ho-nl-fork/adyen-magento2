@@ -54,7 +54,13 @@ class InstallmentValidator extends AbstractValidator
     private $serializer;
 
     /**
+     * @var \Magento\Quote\Model\QuoteRepository
+     */
+    private $quoteRepository;
+
+    /**
      * InstallmentValidator constructor.
+     *
      * @param \Magento\Payment\Gateway\Validator\ResultInterfaceFactory $resultFactory
      * @param \Adyen\Payment\Logger\AdyenLogger $adyenLogger
      * @param \Adyen\Payment\Helper\Data $adyenHelper
@@ -63,6 +69,7 @@ class InstallmentValidator extends AbstractValidator
      * @param \Magento\Framework\Serialize\SerializerInterface $serializer
      * @throws \Magento\Framework\Exception\LocalizedException
      * @throws \Magento\Framework\Exception\NoSuchEntityException
+     * @param \Magento\Quote\Model\QuoteRepository $quoteRepository
      */
     public function __construct(
         \Magento\Payment\Gateway\Validator\ResultInterfaceFactory $resultFactory,
@@ -70,13 +77,15 @@ class InstallmentValidator extends AbstractValidator
         \Adyen\Payment\Helper\Data $adyenHelper,
         \Magento\Checkout\Model\Session $session,
         \Magento\Backend\Model\Session\Quote $backendSession,
-        \Magento\Framework\Serialize\SerializerInterface $serializer
+        \Magento\Framework\Serialize\SerializerInterface $serializer,
+        \Magento\Quote\Model\QuoteRepository $quoteRepository
     ) {
         $this->adyenLogger = $adyenLogger;
         $this->adyenHelper = $adyenHelper;
         $this->session = $session;
         $this->backendSession = $backendSession;
         $this->serializer = $serializer;
+        $this->quoteRepository = $quoteRepository;
         parent::__construct($resultFactory);
 
         $quote = $this->session->getQuote();
@@ -86,17 +95,19 @@ class InstallmentValidator extends AbstractValidator
         $this->adyenHelper->setQuote($quote);
     }
 
-
     public function validate(array $validationSubject)
     {
         $isValid = true;
         $fails = [];
         $payment = $validationSubject['payment'];
-        $quote = $this->backendSession->getQuoteId()
-            ? $this->backendSession->getQuote()
-            : $this->session->getQuote();
 
-        $this->adyenHelper->setQuote($quote);
+        $quoteId = $payment->getQuoteId();
+        //This validator also runs for other payments that don't necesarily have a quoteId
+        if ($quoteId) {
+            $quote = $this->quoteRepository->get($quoteId);
+        } else {
+            $quote = false;
+        }
 
         $installmentsEnabled = $this->adyenHelper->getAdyenCcConfigData('enable_installments');
         if ($quote && $installmentsEnabled) {

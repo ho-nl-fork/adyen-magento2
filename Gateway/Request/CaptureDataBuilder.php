@@ -30,7 +30,6 @@ use Magento\Payment\Gateway\Request\BuilderInterface;
  */
 class CaptureDataBuilder implements BuilderInterface
 {
-
     /**
      * @var \Adyen\Payment\Helper\Data
      */
@@ -54,7 +53,6 @@ class CaptureDataBuilder implements BuilderInterface
      */
     public function build(array $buildSubject)
     {
-
         /** @var \Magento\Payment\Gateway\Data\PaymentDataObject $paymentDataObject */
         $paymentDataObject = \Magento\Payment\Gateway\Helper\SubjectReader::readPayment($buildSubject);
         $amount = \Magento\Payment\Gateway\Helper\SubjectReader::readAmount($buildSubject);
@@ -81,12 +79,10 @@ class CaptureDataBuilder implements BuilderInterface
             $openInvoiceFields = $this->getOpenInvoiceData($payment);
             $requestBody["additionalData"] = $openInvoiceFields;
         }
-
         $request['body'] = $requestBody;
-
+        $request['clientConfig'] = ["storeId" => $payment->getOrder()->getStoreId()];
         return $request;
     }
-
 
     /**
      * @param $payment

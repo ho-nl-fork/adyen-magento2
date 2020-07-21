@@ -34,10 +34,10 @@ class AdyenGenericConfigProvider implements ConfigProviderInterface
      */
     protected $_adyenHelper;
 
-	/**
-	 * @var \Magento\Store\Model\StoreManagerInterface
-	 */
-	protected $storeManager;
+    /**
+     * @var \Magento\Store\Model\StoreManagerInterface
+     */
+    protected $storeManager;
 
     /**
      * @var \Magento\Checkout\Model\Session
@@ -56,7 +56,7 @@ class AdyenGenericConfigProvider implements ConfigProviderInterface
         \Magento\Checkout\Model\Session $checkoutSession
     ) {
         $this->_adyenHelper = $adyenHelper;
-		$this->storeManager = $storeManager;
+        $this->storeManager = $storeManager;
         $this->checkoutSession = $checkoutSession;
 
         $this->_adyenHelper->setQuote($checkoutSession->getQuote());
@@ -79,7 +79,9 @@ class AdyenGenericConfigProvider implements ConfigProviderInterface
             $config['payment']['adyen']['showLogo'] = false;
         }
 
-		$config['payment']['checkoutCardComponentSource'] = $this->_adyenHelper->getCheckoutCardComponentJs($this->storeManager->getStore()->getId());
+        $config['payment']['checkoutCardComponentSource'] = $this->_adyenHelper->getCheckoutCardComponentJs(
+            $this->storeManager->getStore()->getId()
+        );
 
         return $config;
     }
