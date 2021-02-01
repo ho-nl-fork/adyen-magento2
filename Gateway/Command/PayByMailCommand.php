@@ -80,12 +80,15 @@ class PayByMailCommand implements CommandInterface
     /**
      * @param \Magento\Sales\Model\Order\Payment $payment
      * @param float|bool $paymentAmount
+     * @param string|null $merchantReference
+     * @param string|null $skinCode
+     * @param string|null $hmacKey
      * @return string
      */
-    public function generatePaymentUrl($payment, $paymentAmount = false)
+    public function generatePaymentUrl($payment, $paymentAmount = false, $merchantReference = null, $skinCode = null, $hmacKey = null)
     {
         $url = $this->getFormUrl();
-        $fields = $this->getFormFields($payment, $paymentAmount);
+        $fields = $this->getFormFields($payment, $paymentAmount, $merchantReference, $skinCode, $hmacKey);
 
         $count = 1;
         $size = count($fields);
@@ -120,9 +123,13 @@ class PayByMailCommand implements CommandInterface
     /**
      * @param \Magento\Sales\Model\Order\Payment $payment
      * @param float|bool $paymentAmount
+     * @param string|null $merchantReference
+     * @param string|null $skinCode
+     * @param string|null $hmacKey
      * @return array
+     * @throws \Adyen\AdyenException
      */
-    protected function getFormFields($payment, $paymentAmount = false)
+    protected function getFormFields($payment, $paymentAmount = false, $merchantReference = null, $skinCode = null, $hmacKey = null)
     {
         $order = $payment->getOrder();
 
@@ -130,17 +137,23 @@ class PayByMailCommand implements CommandInterface
         $orderCurrencyCode = $order->getOrderCurrencyCode();
         $storeId = $order->getStore()->getId();
 
-        // check if paybymail has it's own skin
-        $skinCode = trim($this->_adyenHelper->getAdyenPayByMailConfigData('skin_code'));
-        if ($skinCode == "") {
-            // use HPP skin and HMAC
-            $skinCode = $this->_adyenHelper->getAdyenHppConfigData('skin_code');
-            $hmacKey = $this->_adyenHelper->getHmac();
-            $shopperLocale = trim($this->_adyenHelper->getAdyenHppConfigData('shopper_locale', $storeId));
-            $countryCode = trim($this->_adyenHelper->getAdyenHppConfigData('country_code', $storeId));
-        } else {
-            // use pay_by_mail skin and hmac
-            $hmacKey = $this->_adyenHelper->getHmacPayByMail();
+        if ($skinCode && !$hmacKey) {
+            throw new \Exception('Custom HMAC key must be provided when using custom skin code');
+        }
+
+        if (!$skinCode) {
+            // check if paybymail has it's own skin
+            $skinCode = trim($this->_adyenHelper->getAdyenPayByMailConfigData('skin_code'));
+            if ($skinCode == "") {
+                // use HPP skin and HMAC
+                $skinCode = $this->_adyenHelper->getAdyenHppConfigData('skin_code');
+                $hmacKey = $this->_adyenHelper->getHmac();
+                $shopperLocale = trim($this->_adyenHelper->getAdyenHppConfigData('shopper_locale', $storeId));
+                $countryCode = trim($this->_adyenHelper->getAdyenHppConfigData('country_code', $storeId));
+            } else {
+                // use pay_by_mail skin and hmac
+                $hmacKey = $this->_adyenHelper->getHmacPayByMail();
+            }
         }
 
         $amount = $this->_adyenHelper->formatAmount(
@@ -169,7 +182,7 @@ class PayByMailCommand implements CommandInterface
 
         $formFields = [];
         $formFields['merchantAccount'] = $merchantAccount;
-        $formFields['merchantReference'] = $realOrderId;
+        $formFields['merchantReference'] = $merchantReference ?: $realOrderId;
         $formFields['paymentAmount'] = (int)$amount;
         $formFields['currencyCode'] = $orderCurrencyCode;
         $formFields['shipBeforeDate'] = date(
