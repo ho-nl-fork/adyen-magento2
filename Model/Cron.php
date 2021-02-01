@@ -1357,7 +1357,6 @@ class Cron
         }
 
         $this->_prepareInvoice();
-        $_paymentCode = $this->_paymentMethodCode();
 
         // for boleto confirmation mail is send on order creation
         if ($this->_paymentMethod != "adyen_boleto") {
