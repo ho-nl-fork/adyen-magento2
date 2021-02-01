@@ -22,10 +22,7 @@
  */
 
 namespace Adyen\Payment\Controller\Process;
-use Magento\Framework\App\CsrfAwareActionInterface;
 use Magento\Framework\App\Request\Http as Http;
-use Magento\Framework\App\Request\InvalidRequestException;
-use Magento\Framework\App\RequestInterface;
 use Magento\Vault\Api\Data\PaymentTokenInterface;
 use Magento\Vault\Api\Data\PaymentTokenFactoryInterface;
 use Magento\Sales\Api\Data\OrderPaymentExtensionInterface;
@@ -33,7 +30,7 @@ use Magento\Sales\Api\Data\OrderPaymentExtensionInterfaceFactory;
 use Magento\Sales\Model\ResourceModel\Order\Payment as OrderPaymentResource;
 use Magento\Payment\Model\InfoInterface;
 
-class Redirect extends \Magento\Framework\App\Action\Action implements CsrfAwareActionInterface
+class Redirect extends \Magento\Framework\App\Action\Action
 {
     /**
      * @var \Magento\Quote\Model\Quote
@@ -379,23 +376,5 @@ class Redirect extends \Magento\Framework\App\Action\Action implements CsrfAware
             $payment->setExtensionAttributes($extensionAttributes);
         }
         return $extensionAttributes;
-    }
-
-    /**
-     * @param RequestInterface $request
-     * @return bool
-     */
-    public function validateForCsrf(RequestInterface $request): bool
-    {
-        return true;
-    }
-
-    /**
-     * @param RequestInterface $request
-     * @return InvalidRequestException|null
-     */
-    public function createCsrfValidationException(RequestInterface $request): ?InvalidRequestException
-    {
-        return null;
     }
 }
