@@ -1255,6 +1255,17 @@ class Cron
                     );
                 }
                 break;
+            case 'CHARGEBACK':
+                $this->eventManager->dispatch(
+                    'adyen_payment_cron_process_notification_chargeback',
+                    [
+                        'order' => $this->_order,
+                        'psp_reference' => $this->_pspReference,
+                        'original_reference' => $this->_originalReference,
+                        'payment_method' => $this->_paymentMethod,
+                    ]
+                );
+                break;
             default:
                 $this->_adyenLogger->addAdyenNotificationCronjob(
                     sprintf('This notification event: %s is not supported so will be ignored', $this->_eventCode)
