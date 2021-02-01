@@ -25,6 +25,7 @@ namespace Adyen\Payment\Model;
 
 use Magento\Framework\Api\SearchCriteriaBuilder;
 use Magento\Framework\Webapi\Exception;
+use Magento\Sales\Model\Order;
 use Magento\Sales\Model\Order\Email\Sender\OrderSender;
 use Magento\Sales\Model\Order\Email\Sender\InvoiceSender;
 use Magento\Framework\App\Area;
@@ -1416,7 +1417,7 @@ class Cron
         );
 
         // only do this if status in configuration is set
-        if (!empty($status)) {
+        if (!empty($status) && $this->_order->getState() !== Order::STATE_COMPLETE) {
             $this->_order->addStatusHistoryComment(__('Payment is authorised waiting for capture'), $status);
             $this->_setState($status);
 
@@ -1520,6 +1521,10 @@ class Cron
         if ($this->_isTotalAmount($paymentObj->getEntityId(), $orderCurrencyCode)) {
             $this->_createInvoice();
         } else {
+            if ($this->_order->getState() === Order::STATE_COMPLETE) {
+                $comment = 'Couldn\'t create an invoice; order already completed.';
+                $this->_order->addStatusHistoryComment(__($comment), 'multiple_payments');
+            }
             $this->_adyenLogger->addAdyenNotificationCronjob(
                 'This is a partial AUTHORISATION and the full amount is not reached'
             );
