@@ -240,6 +240,11 @@ class Cron
     protected $configHelper;
 
     /**
+     * @var \Magento\Framework\Event\ManagerInterface
+     */
+    private $eventManager;
+
+    /**
      * Cron constructor.
      *
      * @param \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig
@@ -287,7 +292,8 @@ class Cron
         \Magento\Framework\Serialize\SerializerInterface $serializer,
         \Magento\Framework\Notification\NotifierInterface $notifierPool,
         \Magento\Framework\Stdlib\DateTime\TimezoneInterface $timezone,
-        \Adyen\Payment\Helper\Config $configHelper
+        \Adyen\Payment\Helper\Config $configHelper,
+        \Magento\Framework\Event\ManagerInterface $eventManager
     ) {
         $this->_scopeConfig = $scopeConfig;
         $this->_adyenLogger = $adyenLogger;
@@ -313,6 +319,7 @@ class Cron
         $this->notifierPool = $notifierPool;
         $this->timezone = $timezone;
         $this->configHelper = $configHelper;
+        $this->eventManager = $eventManager;
     }
 
     /**
@@ -1834,6 +1841,13 @@ class Cron
                 $this->_invoiceSender->send($invoice);
             }
         } else {
+            $this->eventManager->dispatch(
+                'adyen_payment_cron_failed_invoice_creation',
+                [
+                    'order' => $this->_order,
+                ]
+            );
+
             $this->_adyenLogger->addAdyenNotificationCronjob
             (
                 'It is not possible to create invoice for this order'
