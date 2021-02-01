@@ -1122,6 +1122,16 @@ class Cron
                 break;
 
             case Notification::RECURRING_CONTRACT:
+                $this->eventManager->dispatch(
+                    'adyen_payment_cron_process_notification_recurring_contract',
+                    [
+                        'order' => $this->_order,
+                        'psp_reference' => $this->_pspReference,
+                        'original_reference' => $this->_originalReference,
+                        'payment_method' => $this->_paymentMethod,
+                    ]
+                );
+
                 // only store billing agreements if Vault is disabled
                 if (!$this->_adyenHelper->isCreditCardVaultEnabled()) {
                     // storedReferenceCode
